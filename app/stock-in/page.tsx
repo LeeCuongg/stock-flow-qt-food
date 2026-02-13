@@ -234,14 +234,14 @@ export default function StockInPage() {
 
       {/* Create Stock-In Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Tạo phiếu nhập kho</DialogTitle>
             <DialogDescription>Nhập thông tin phiếu nhập và danh sách sản phẩm</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="supplier">Nhà cung cấp</Label>
                 <Input id="supplier" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Tên nhà cung cấp" />
@@ -286,59 +286,51 @@ export default function StockInPage() {
               </Select>
             </div>
 
-            {/* Items table */}
+            {/* Items as cards */}
             {items.length > 0 && (
-              <div className="border rounded-md">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Sản phẩm</TableHead>
-                      <TableHead>Mã lô *</TableHead>
-                      <TableHead>HSD</TableHead>
-                      <TableHead>SL *</TableHead>
-                      <TableHead>Giá nhập *</TableHead>
-                      <TableHead className="text-right">Thành tiền</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((item, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell>
-                          <div className="text-sm font-medium">{item.product_name}</div>
-                          <Badge variant="secondary" className="text-xs">{item.product_unit}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Input className="w-28" value={item.batch_code}
-                            onChange={(e) => updateItem(idx, 'batch_code', e.target.value)} placeholder="VD: LOT-001" />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="date" className="w-36" value={item.expired_date}
-                            onChange={(e) => updateItem(idx, 'expired_date', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" className="w-20" min={1} value={item.quantity}
-                            onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" className="w-28" min={0} value={item.cost_price}
-                            onChange={(e) => updateItem(idx, 'cost_price', Number(e.target.value))} />
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {(item.quantity * item.cost_price).toLocaleString('vi-VN')}
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" onClick={() => removeItem(idx)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="flex justify-end p-3 border-t">
+              <div className="space-y-3">
+                <Label>Danh sách sản phẩm nhập ({items.length})</Label>
+                {items.map((item, idx) => (
+                  <div key={idx} className="border rounded-lg p-3 space-y-3 relative">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-sm font-medium">{item.product_name}</span>
+                        <Badge variant="secondary" className="ml-2 text-xs">{item.product_unit}</Badge>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="grid gap-1">
+                        <Label className="text-xs text-muted-foreground">Mã lô *</Label>
+                        <Input value={item.batch_code}
+                          onChange={(e) => updateItem(idx, 'batch_code', e.target.value)} placeholder="VD: LOT-001" />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label className="text-xs text-muted-foreground">Hạn sử dụng</Label>
+                        <Input type="date" value={item.expired_date}
+                          onChange={(e) => updateItem(idx, 'expired_date', e.target.value)} />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label className="text-xs text-muted-foreground">Số lượng *</Label>
+                        <Input type="number" min={1} value={item.quantity}
+                          onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label className="text-xs text-muted-foreground">Giá nhập *</Label>
+                        <Input type="number" min={0} value={item.cost_price}
+                          onChange={(e) => updateItem(idx, 'cost_price', Number(e.target.value))} />
+                      </div>
+                    </div>
+                    <div className="text-right text-sm text-muted-foreground">
+                      Thành tiền: <span className="font-medium text-foreground">{(item.quantity * item.cost_price).toLocaleString('vi-VN')} VND</span>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex justify-end pt-2 border-t">
                   <div className="text-sm font-medium">
-                    Tổng: <span className="text-lg">{totalCost.toLocaleString('vi-VN')}</span> VND
+                    Tổng cộng: <span className="text-lg">{totalCost.toLocaleString('vi-VN')}</span> VND
                   </div>
                 </div>
               </div>
