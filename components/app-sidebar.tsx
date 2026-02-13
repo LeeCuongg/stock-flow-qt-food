@@ -32,37 +32,38 @@ import {
   LogOut,
   ChevronUp,
   User2,
+  Users,
 } from 'lucide-react'
 import Link from 'next/link'
 
 const navItems = [
   {
-    title: 'Tong quan',
+    title: 'Tổng quan',
     url: '/dashboard',
     icon: LayoutDashboard,
   },
   {
-    title: 'San pham',
+    title: 'Sản phẩm',
     url: '/products',
     icon: Package,
   },
   {
-    title: 'Nhap kho',
+    title: 'Nhập kho',
     url: '/stock-in',
     icon: PackagePlus,
   },
   {
-    title: 'Ban hang',
+    title: 'Bán hàng',
     url: '/sales',
     icon: ShoppingCart,
   },
   {
-    title: 'Hao hut',
+    title: 'Hao hụt',
     url: '/loss',
     icon: AlertTriangle,
   },
   {
-    title: 'Ton kho',
+    title: 'Tồn kho',
     url: '/inventory',
     icon: Warehouse,
   },
@@ -70,7 +71,13 @@ const navItems = [
 
 const settingsItems = [
   {
-    title: 'Cai dat',
+    title: 'Người dùng',
+    url: '/users',
+    icon: Users,
+    adminOnly: true,
+  },
+  {
+    title: 'Cài đặt',
     url: '/settings',
     icon: Settings,
   },
@@ -79,9 +86,10 @@ const settingsItems = [
 interface AppSidebarProps {
   userEmail?: string
   userFullName?: string
+  userRole?: string
 }
 
-export function AppSidebar({ userEmail, userFullName }: AppSidebarProps) {
+export function AppSidebar({ userEmail, userFullName, userRole }: AppSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -90,6 +98,11 @@ export function AppSidebar({ userEmail, userFullName }: AppSidebarProps) {
     await supabase.auth.signOut()
     router.push('/auth/login')
   }
+
+  // Lọc menu items dựa trên role
+  const filteredSettingsItems = settingsItems.filter(
+    (item) => !item.adminOnly || userRole === 'admin'
+  )
 
   return (
     <Sidebar>
@@ -100,13 +113,13 @@ export function AppSidebar({ userEmail, userFullName }: AppSidebarProps) {
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-bold tracking-tight font-sans">StockFlowQT</span>
-            <span className="text-[11px] text-muted-foreground leading-none">Quan ly kho thuc pham</span>
+            <span className="text-[11px] text-muted-foreground leading-none">Quản lý kho thực phẩm</span>
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Quan ly</SidebarGroupLabel>
+          <SidebarGroupLabel>Quản lý</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
@@ -123,10 +136,10 @@ export function AppSidebar({ userEmail, userFullName }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>He thong</SidebarGroupLabel>
+          <SidebarGroupLabel>Hệ thống</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {settingsItems.map((item) => (
+              {filteredSettingsItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={pathname === item.url}>
                     <Link href={item.url}>
@@ -149,7 +162,7 @@ export function AppSidebar({ userEmail, userFullName }: AppSidebarProps) {
                   <User2 className="h-4 w-4" />
                   <div className="flex flex-col items-start">
                     <span className="text-sm font-medium truncate max-w-[140px]">
-                      {userFullName || 'Nguoi dung'}
+                      {userFullName || 'Người dùng'}
                     </span>
                     <span className="text-[11px] text-muted-foreground truncate max-w-[140px]">
                       {userEmail}
@@ -164,7 +177,7 @@ export function AppSidebar({ userEmail, userFullName }: AppSidebarProps) {
               >
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Dang xuat</span>
+                  <span>Đăng xuất</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -20,33 +20,33 @@ export default async function DashboardPage() {
 
   const stats = [
     {
-      title: 'San pham',
+      title: 'Sản phẩm',
       value: productCount ?? 0,
       icon: Package,
-      description: 'Tong so san pham trong he thong',
+      description: 'Tổng số sản phẩm trong hệ thống',
     },
     {
-      title: 'Lo hang',
+      title: 'Lô hàng',
       value: batchCount ?? 0,
       icon: PackagePlus,
-      description: 'Tong so lo hang ton kho',
+      description: 'Tổng số lô hàng tồn kho',
     },
     {
-      title: 'Phieu nhap',
+      title: 'Phiếu nhập',
       value: stockInCount ?? 0,
       icon: PackagePlus,
-      description: 'Tong so phieu nhap kho',
+      description: 'Tổng số phiếu nhập kho',
     },
     {
-      title: 'Don ban',
+      title: 'Đơn bán',
       value: salesCount ?? 0,
       icon: ShoppingCart,
-      description: 'Tong so don ban hang',
+      description: 'Tổng số đơn bán hàng',
     },
   ]
 
   return (
-    <DashboardLayout title="Tong quan">
+    <DashboardLayout title="Tổng quan">
       <div className="flex flex-col gap-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
@@ -70,12 +70,12 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Hoat dong gan day</span>
+              <span className="text-sm font-medium">Hoạt động gần đây</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Chua co hoat dong nao. Bat dau bang cach nhap kho hoac tao don ban hang.
+              Chưa có hoạt động nào. Bắt đầu bằng cách nhập kho hoặc tạo đơn bán hàng.
             </p>
           </CardContent>
         </Card>

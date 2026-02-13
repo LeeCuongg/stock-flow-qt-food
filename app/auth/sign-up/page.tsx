@@ -32,7 +32,7 @@ export default function SignUpPage() {
     setError(null)
 
     if (password !== repeatPassword) {
-      setError('Mat khau khong khop')
+      setError('Mật khẩu không khớp')
       setIsLoading(false)
       return
     }
@@ -54,7 +54,7 @@ export default function SignUpPage() {
       if (error) throw error
       router.push('/auth/sign-up-success')
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'Dang ky that bai')
+      setError(error instanceof Error ? error.message : 'Đăng ký thất bại')
     } finally {
       setIsLoading(false)
     }
@@ -69,18 +69,18 @@ export default function SignUpPage() {
               <Package className="h-8 w-8" />
               <span className="text-2xl font-bold tracking-tight font-sans">StockFlowQT</span>
             </div>
-            <p className="text-sm text-muted-foreground">Tao tai khoan moi</p>
+            <p className="text-sm text-muted-foreground">Tạo tài khoản mới</p>
           </div>
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">Dang ky</CardTitle>
-              <CardDescription>Nhap thong tin de tao tai khoan</CardDescription>
+              <CardTitle className="text-2xl">Đăng ký</CardTitle>
+              <CardDescription>Nhập thông tin để tạo tài khoản</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSignUp}>
                 <div className="flex flex-col gap-6">
                   <div className="grid gap-2">
-                    <Label htmlFor="fullName">Ho va ten</Label>
+                    <Label htmlFor="fullName">Họ và tên</Label>
                     <Input
                       id="fullName"
                       type="text"
@@ -102,7 +102,7 @@ export default function SignUpPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="password">Mat khau</Label>
+                    <Label htmlFor="password">Mật khẩu</Label>
                     <Input
                       id="password"
                       type="password"
@@ -112,7 +112,7 @@ export default function SignUpPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="repeat-password">Nhap lai mat khau</Label>
+                    <Label htmlFor="repeat-password">Nhập lại mật khẩu</Label>
                     <Input
                       id="repeat-password"
                       type="password"
@@ -123,16 +123,16 @@ export default function SignUpPage() {
                   </div>
                   {error && <p className="text-sm text-destructive">{error}</p>}
                   <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Dang xu ly...' : 'Dang ky'}
+                    {isLoading ? 'Đang xử lý...' : 'Đăng ký'}
                   </Button>
                 </div>
                 <div className="mt-4 text-center text-sm">
-                  {'Da co tai khoan? '}
+                  {'Đã có tài khoản? '}
                   <Link
                     href="/auth/login"
                     className="underline underline-offset-4 text-primary"
                   >
-                    Dang nhap
+                    Đăng nhập
                   </Link>
                 </div>
               </form>

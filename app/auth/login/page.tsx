@@ -37,7 +37,7 @@ export default function LoginPage() {
       if (error) throw error
       router.push('/dashboard')
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'Dang nhap that bai')
+      setError(error instanceof Error ? error.message : 'Đăng nhập thất bại')
     } finally {
       setIsLoading(false)
     }
@@ -52,13 +52,13 @@ export default function LoginPage() {
               <Package className="h-8 w-8" />
               <span className="text-2xl font-bold tracking-tight font-sans">StockFlowQT</span>
             </div>
-            <p className="text-sm text-muted-foreground">Quan ly kho & doanh thu thuc pham</p>
+            <p className="text-sm text-muted-foreground">Quản lý kho & doanh thu thực phẩm</p>
           </div>
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">Dang nhap</CardTitle>
+              <CardTitle className="text-2xl">Đăng nhập</CardTitle>
               <CardDescription>
-                Nhap email va mat khau de dang nhap
+                Nhập email và mật khẩu để đăng nhập
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -76,7 +76,7 @@ export default function LoginPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="password">Mat khau</Label>
+                    <Label htmlFor="password">Mật khẩu</Label>
                     <Input
                       id="password"
                       type="password"
@@ -87,16 +87,16 @@ export default function LoginPage() {
                   </div>
                   {error && <p className="text-sm text-destructive">{error}</p>}
                   <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Dang xu ly...' : 'Dang nhap'}
+                    {isLoading ? 'Đang xử lý...' : 'Đăng nhập'}
                   </Button>
                 </div>
                 <div className="mt-4 text-center text-sm">
-                  {'Chua co tai khoan? '}
+                  {'Chưa có tài khoản? '}
                   <Link
                     href="/auth/sign-up"
                     className="underline underline-offset-4 text-primary"
                   >
-                    Dang ky
+                    Đăng ký
                   </Link>
                 </div>
               </form>

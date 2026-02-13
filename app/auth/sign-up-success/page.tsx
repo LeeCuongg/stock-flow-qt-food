@@ -20,12 +20,12 @@ export default function SignUpSuccessPage() {
           </div>
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">Dang ky thanh cong!</CardTitle>
-              <CardDescription>Kiem tra email de xac nhan</CardDescription>
+              <CardTitle className="text-2xl">Đăng ký thành công!</CardTitle>
+              <CardDescription>Kiểm tra email để xác nhận</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Ban da dang ky thanh cong. Vui long kiem tra email de xac nhan tai khoan truoc khi dang nhap.
+                Bạn đã đăng ký thành công. Vui lòng kiểm tra email để xác nhận tài khoản trước khi đăng nhập.
               </p>
             </CardContent>
           </Card>

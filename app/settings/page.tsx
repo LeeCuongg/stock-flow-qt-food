@@ -18,12 +18,12 @@ export default async function SettingsPage() {
   }
 
   return (
-    <DashboardLayout title="Cai dat">
+    <DashboardLayout title="Cài đặt">
       <div className="flex flex-col gap-4 max-w-2xl">
         <Card>
           <CardHeader>
-            <CardTitle>Thong tin tai khoan</CardTitle>
-            <CardDescription>Thong tin ca nhan va vai tro cua ban</CardDescription>
+            <CardTitle>Thông tin tài khoản</CardTitle>
+            <CardDescription>Thông tin cá nhân và vai trò của bạn</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4">
@@ -32,11 +32,11 @@ export default async function SettingsPage() {
                 <span className="text-sm font-medium">{user?.email || '-'}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Ho va ten</span>
+                <span className="text-sm text-muted-foreground">Họ và tên</span>
                 <span className="text-sm font-medium">{profile?.full_name || '-'}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Vai tro</span>
+                <span className="text-sm text-muted-foreground">Vai trò</span>
                 <Badge variant={profile?.role === 'admin' ? 'default' : 'secondary'}>
                   {profile?.role || 'staff'}
                 </Badge>
@@ -44,7 +44,7 @@ export default async function SettingsPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Kho</span>
                 <span className="text-sm font-medium">
-                  {profile?.warehouse_id ? 'Da gan kho' : 'Chua gan kho'}
+                  {profile?.warehouse_id ? 'Đã gán kho' : 'Chưa gán kho'}
                 </span>
               </div>
             </div>
@@ -52,13 +52,13 @@ export default async function SettingsPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>He thong</CardTitle>
-            <CardDescription>Thong tin phien ban va cau hinh</CardDescription>
+            <CardTitle>Hệ thống</CardTitle>
+            <CardDescription>Thông tin phiên bản và cấu hình</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Phien ban</span>
+                <span className="text-sm text-muted-foreground">Phiên bản</span>
                 <span className="text-sm font-medium">Phase 1 - v0.1.0</span>
               </div>
               <div className="flex items-center justify-between">

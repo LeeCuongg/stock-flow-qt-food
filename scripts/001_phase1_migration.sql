@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS public.inventory_batches (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 4. STOCK IN (phieu nhap kho)
+-- 4. STOCK IN (phiếu nhập kho)
 CREATE TABLE IF NOT EXISTS public.stock_in (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   warehouse_id UUID NOT NULL REFERENCES public.warehouses(id) ON DELETE CASCADE,
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS public.stock_in_items (
   total_price NUMERIC(14,2) NOT NULL DEFAULT 0
 );
 
--- 5. SALES (phieu ban hang)
+-- 5. SALES (phiếu bán hàng)
 CREATE TABLE IF NOT EXISTS public.sales (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   warehouse_id UUID NOT NULL REFERENCES public.warehouses(id) ON DELETE CASCADE,
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS public.sales_items (
   total_price NUMERIC(14,2) NOT NULL DEFAULT 0
 );
 
--- 6. LOSS RECORDS (ghi nhan hao hut / mat mat)
+-- 6. LOSS RECORDS (ghi nhận hao hụt / mất mát)
 CREATE TABLE IF NOT EXISTS public.loss_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   warehouse_id UUID NOT NULL REFERENCES public.warehouses(id) ON DELETE CASCADE,
@@ -219,16 +219,16 @@ CREATE TRIGGER on_auth_user_created
 
 -- Seed default warehouse
 INSERT INTO public.warehouses (id, name, address) VALUES
-  ('a0000000-0000-0000-0000-000000000001', 'Kho chinh', 'Ho Chi Minh City')
+  ('a0000000-0000-0000-0000-000000000001', 'Kho chính', 'Hồ Chí Minh')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed 5 sample food products
 INSERT INTO public.products (id, warehouse_id, name, sku, unit, category, price) VALUES
-  ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'Thit heo tuoi', 'SP001', 'kg', 'Thit', 120000),
-  ('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'Ca hoi phi le', 'SP002', 'kg', 'Hai san', 350000),
-  ('b0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'Rau cai thia', 'SP003', 'bo', 'Rau cu', 15000),
-  ('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'Trung ga', 'SP004', 'vi', 'Trung/Sua', 35000),
-  ('b0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'Bot mi da dung', 'SP005', 'kg', 'Bot/Gia vi', 25000)
+  ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'Thịt heo tươi', 'SP001', 'kg', 'Thịt', 120000),
+  ('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'Cá hồi phi lê', 'SP002', 'kg', 'Hải sản', 350000),
+  ('b0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'Rau cải thìa', 'SP003', 'bó', 'Rau củ', 15000),
+  ('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'Trứng gà', 'SP004', 'vỉ', 'Trứng/Sữa', 35000),
+  ('b0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'Bột mì đa dụng', 'SP005', 'kg', 'Bột/Gia vị', 25000)
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed 2 sample batches

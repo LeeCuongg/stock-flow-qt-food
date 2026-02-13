@@ -13,21 +13,26 @@ export async function DashboardLayout({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  let fullName = user?.email || 'Nguoi dung'
+  let fullName = user?.email || 'Người dùng'
+  let userRole = 'staff'
+  
   if (user) {
     const { data: profile } = await supabase
       .from('user_profiles')
-      .select('full_name')
+      .select('full_name, role')
       .eq('id', user.id)
       .single()
     if (profile?.full_name) {
       fullName = profile.full_name
     }
+    if (profile?.role) {
+      userRole = profile.role
+    }
   }
 
   return (
     <SidebarProvider>
-      <AppSidebar userEmail={user?.email} userFullName={fullName} />
+      <AppSidebar userEmail={user?.email} userFullName={fullName} userRole={userRole} />
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
