@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'StockFlowQTfood - Quan ly kho & doanh thu',
-  description: 'He thong quan ly kho va doanh thu nganh thuc pham',
+  title: 'StockFlowQTfood - Quản lý kho & doanh thu',
+  description: 'Hệ thống quản lý kho và doanh thu ngành thực phẩm',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="vi">
       <body className={`font-sans antialiased`}>
         {children}
         <Analytics />
