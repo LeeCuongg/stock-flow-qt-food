@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'StockFlowQTfood - Quan ly kho & doanh thu',
+  description: 'He thong quan ly kho va doanh thu nganh thuc pham',
   generator: 'v0.app',
   icons: {
     icon: [
