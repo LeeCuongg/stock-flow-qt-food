@@ -17,8 +17,19 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, ShoppingCart } from 'lucide-react'
+import { Plus, Trash2, ShoppingCart, CreditCard } from 'lucide-react'
 import { toast } from 'sonner'
+import { CurrencyInput } from '@/components/ui/currency-input'
+
+interface Customer { id: string; name: string }
+
+const PAYMENT_METHODS = [
+  { value: 'CASH', label: 'Tiền mặt' },
+  { value: 'BANK', label: 'Chuyển khoản' },
+  { value: 'MOMO', label: 'MoMo' },
+  { value: 'ZALOPAY', label: 'ZaloPay' },
+  { value: 'OTHER', label: 'Khác' },
+]
 
 interface Product {
   id: string
@@ -53,11 +64,34 @@ interface SaleItem {
 interface SaleRecord {
   id: string
   customer_name: string | null
+  customer_id: string | null
   note: string | null
   total_revenue: number
   total_cost_estimated: number
   profit: number
+  amount_paid: number
+  payment_status: string
   created_at: string
+}
+
+interface SaleDetail {
+  id: string
+  customer_name: string | null
+  note: string | null
+  total_revenue: number
+  total_cost_estimated: number
+  profit: number
+  amount_paid: number
+  payment_status: string
+  created_at: string
+  sales_items: {
+    quantity: number
+    sale_price: number
+    cost_price: number
+    total_price: number
+    products: { name: string; unit: string } | null
+    inventory_batches: { batch_code: string | null; expiry_date: string | null } | null
+  }[]
 }
 
 export default function SalesPage() {
@@ -68,17 +102,32 @@ export default function SalesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [customerAddress, setCustomerAddress] = useState('')
+  const [selectedCustomerId, setSelectedCustomerId] = useState('')
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [note, setNote] = useState('')
   const [items, setItems] = useState<SaleItem[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
   const [productSearch, setProductSearch] = useState('')
+  // Payment modal
+  const [payDialogOpen, setPayDialogOpen] = useState(false)
+  const [payingSale, setPayingSale] = useState<SaleRecord | null>(null)
+  const [payAmount, setPayAmount] = useState(0)
+  const [payMethod, setPayMethod] = useState('CASH')
+  const [payNote, setPayNote] = useState('')
+  const [payingSaving, setPayingSaving] = useState(false)
+  // Detail modal
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [saleDetail, setSaleDetail] = useState<SaleDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const supabase = createClient()
 
   const loadRecords = useCallback(async () => {
     setIsLoading(true)
     const { data, error } = await supabase
       .from('sales')
-      .select('id, customer_name, note, total_revenue, total_cost_estimated, profit, created_at')
+      .select('id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, created_at')
       .order('created_at', { ascending: false })
     if (error) toast.error('Lỗi tải đơn bán')
     else setRecords(data || [])
@@ -102,11 +151,17 @@ export default function SalesPage() {
     setBatches(data || [])
   }, [])
 
+  const loadCustomers = useCallback(async () => {
+    const { data } = await supabase.from('customers').select('id, name').order('name')
+    setCustomers(data || [])
+  }, [])
+
   useEffect(() => {
     loadRecords()
     loadProducts()
     loadBatches()
-  }, [loadRecords, loadProducts, loadBatches])
+    loadCustomers()
+  }, [loadRecords, loadProducts, loadBatches, loadCustomers])
 
   const filteredProducts = products.filter(
     (p) =>
@@ -120,12 +175,14 @@ export default function SalesPage() {
 
   const openCreate = () => {
     setCustomerName('')
+    setCustomerPhone('')
+    setCustomerAddress('')
+    setSelectedCustomerId('')
     setNote('')
     setItems([])
     setSelectedProductId('')
     setProductSearch('')
     setDialogOpen(true)
-    // Reload batches to get fresh remaining quantities
     loadBatches()
   }
 
@@ -196,6 +253,18 @@ export default function SalesPage() {
         return
       }
 
+      let customerId = selectedCustomerId || null
+      // Auto-create customer if new name entered
+      if (!customerId && customerName.trim()) {
+        const { data: newCust, error: cErr } = await supabase
+          .from('customers')
+          .insert({ name: customerName.trim(), phone: customerPhone.trim() || null, address: customerAddress.trim() || null, warehouse_id: warehouseId })
+          .select('id')
+          .single()
+        if (cErr) throw cErr
+        customerId = newCust.id
+      }
+
       const rpcItems = items.map((item) => ({
         product_id: item.product_id,
         batch_id: item.batch_id,
@@ -208,13 +277,15 @@ export default function SalesPage() {
         p_customer_name: customerName.trim() || null,
         p_note: note.trim() || null,
         p_items: rpcItems,
+        p_customer_id: customerId,
       })
 
       if (error) throw error
-      toast.success('Tạo đơn bán hàng thành công')
+      toast.success('Tạo đơn xuất kho thành công')
       setDialogOpen(false)
       loadRecords()
       loadBatches()
+      loadCustomers()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Lỗi không xác định'
       toast.error(`Lỗi: ${message}`)
@@ -223,21 +294,69 @@ export default function SalesPage() {
     }
   }
 
+  const openPayment = (sale: SaleRecord) => {
+    setPayingSale(sale)
+    setPayAmount(sale.total_revenue - sale.amount_paid)
+    setPayMethod('CASH')
+    setPayNote('')
+    setPayDialogOpen(true)
+  }
+
+  const handlePayment = async () => {
+    if (!payingSale || payAmount <= 0) { toast.error('Số tiền phải > 0'); return }
+    setPayingSaving(true)
+    try {
+      const { error } = await supabase.rpc('add_sale_payment', {
+        p_sale_id: payingSale.id,
+        p_amount: payAmount,
+        p_payment_method: payMethod,
+        p_note: payNote.trim() || null,
+      })
+      if (error) throw error
+      toast.success('Thanh toán thành công')
+      setPayDialogOpen(false)
+      loadRecords()
+    } catch (err: unknown) { toast.error(`Lỗi: ${err instanceof Error ? err.message : 'Không xác định'}`) }
+    finally { setPayingSaving(false) }
+  }
+
+  const paymentStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PAID': return <Badge className="bg-green-600 text-white hover:bg-green-700">Đã TT</Badge>
+      case 'PARTIAL': return <Badge className="bg-yellow-500 text-white hover:bg-yellow-600">TT một phần</Badge>
+      default: return <Badge variant="destructive">Chưa TT</Badge>
+    }
+  }
+
+  const openSaleDetail = async (record: SaleRecord) => {
+    setDetailOpen(true)
+    setSaleDetail(null)
+    setDetailLoading(true)
+    const { data, error } = await supabase
+      .from('sales')
+      .select('id, customer_name, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, created_at, sales_items(quantity, sale_price, cost_price, total_price, products(name, unit), inventory_batches(batch_code, expiry_date))')
+      .eq('id', record.id)
+      .single()
+    if (error) toast.error('Lỗi tải chi tiết')
+    else setSaleDetail(data as unknown as SaleDetail)
+    setDetailLoading(false)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Bán hàng</h1>
-          <p className="text-sm text-muted-foreground">Quản lý đơn bán hàng</p>
+          <h1 className="text-2xl font-bold tracking-tight">Xuất kho</h1>
+          <p className="text-sm text-muted-foreground">Quản lý đơn xuất kho</p>
         </div>
         <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" /> Tạo đơn bán
+          <Plus className="mr-2 h-4 w-4" /> Tạo đơn xuất
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Danh sách đơn bán</CardTitle>
+          <CardTitle>Danh sách đơn xuất</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -246,7 +365,7 @@ export default function SalesPage() {
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <ShoppingCart className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-medium">Chưa có đơn bán</h3>
-              <p className="text-sm text-muted-foreground mt-1">Nhấn &quot;Tạo đơn bán&quot; để bắt đầu.</p>
+              <p className="text-sm text-muted-foreground mt-1">Nhấn &quot;Tạo đơn xuất&quot; để bắt đầu.</p>
             </div>
           ) : (
             <Table>
@@ -255,21 +374,35 @@ export default function SalesPage() {
                   <TableHead>Ngày tạo</TableHead>
                   <TableHead>Khách hàng</TableHead>
                   <TableHead className="text-right">Doanh thu</TableHead>
+                  <TableHead className="text-right">Đã TT</TableHead>
+                  <TableHead>Trạng thái</TableHead>
                   <TableHead className="text-right">Lợi nhuận</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {records.map((r) => (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} className="cursor-pointer" onClick={() => openSaleDetail(r)}>
                     <TableCell>{new Date(r.created_at).toLocaleDateString('vi-VN')}</TableCell>
                     <TableCell>{r.customer_name || '-'}</TableCell>
                     <TableCell className="text-right font-medium">
                       {Number(r.total_revenue).toLocaleString('vi-VN')}
                     </TableCell>
                     <TableCell className="text-right">
+                      {Number(r.amount_paid).toLocaleString('vi-VN')}
+                    </TableCell>
+                    <TableCell>{paymentStatusBadge(r.payment_status)}</TableCell>
+                    <TableCell className="text-right">
                       <span className={Number(r.profit) >= 0 ? 'text-green-600' : 'text-destructive'}>
                         {Number(r.profit).toLocaleString('vi-VN')}
                       </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.payment_status !== 'PAID' && (
+                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openPayment(r) }}>
+                          <CreditCard className="mr-1 h-3 w-3" /> Thanh toán
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -279,19 +412,107 @@ export default function SalesPage() {
         </CardContent>
       </Card>
 
+      {/* Sale Detail Dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Chi tiết đơn xuất</DialogTitle>
+            <DialogDescription>
+              {saleDetail ? new Date(saleDetail.created_at).toLocaleString('vi-VN') : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {detailLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Đang tải...</div>
+          ) : saleDetail && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div><span className="text-muted-foreground">Khách hàng:</span> {saleDetail.customer_name || '-'}</div>
+                <div><span className="text-muted-foreground">Ghi chú:</span> {saleDetail.note || '-'}</div>
+                <div><span className="text-muted-foreground">Doanh thu:</span> <span className="font-medium">{Number(saleDetail.total_revenue).toLocaleString('vi-VN')} VND</span></div>
+                <div><span className="text-muted-foreground">Giá vốn:</span> {Number(saleDetail.total_cost_estimated).toLocaleString('vi-VN')} VND</div>
+                <div><span className="text-muted-foreground">Lợi nhuận:</span> <span className={Number(saleDetail.profit) >= 0 ? 'font-medium text-green-600' : 'font-medium text-destructive'}>{Number(saleDetail.profit).toLocaleString('vi-VN')} VND</span></div>
+                <div><span className="text-muted-foreground">Đã TT:</span> {Number(saleDetail.amount_paid).toLocaleString('vi-VN')} VND</div>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sản phẩm</TableHead>
+                    <TableHead>Mã lô</TableHead>
+                    <TableHead className="text-right">SL</TableHead>
+                    <TableHead className="text-right">Giá bán</TableHead>
+                    <TableHead className="text-right">Giá vốn</TableHead>
+                    <TableHead className="text-right">Thành tiền</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {saleDetail.sales_items.map((item, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">{item.products?.name || '-'} <span className="text-xs text-muted-foreground">({item.products?.unit})</span></TableCell>
+                      <TableCell className="font-mono text-xs">{item.inventory_batches?.batch_code || '-'}</TableCell>
+                      <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell className="text-right">{Number(item.sale_price).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell className="text-right font-medium">{Number(item.total_price).toLocaleString('vi-VN')}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Create Sale Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Tạo đơn bán hàng</DialogTitle>
+            <DialogTitle>Tạo đơn xuất kho</DialogTitle>
             <DialogDescription>Chọn sản phẩm từ lô hàng tồn kho</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="customer">Khách hàng</Label>
-                <Input id="customer" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Tên khách hàng" />
+                <Label>Khách hàng</Label>
+                <Select value={selectedCustomerId} onValueChange={(val) => {
+                  if (val === 'none') {
+                    setSelectedCustomerId('')
+                    setCustomerName('')
+                  } else {
+                    setSelectedCustomerId(val)
+                    const c = customers.find((c) => c.id === val)
+                    if (c) setCustomerName(c.name)
+                  }
+                }}>
+                  <SelectTrigger><SelectValue placeholder="Chọn khách hàng..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Nhập tay --</SelectItem>
+                    {customers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!selectedCustomerId && (
+                  <>
+                    <Input
+                      placeholder="Nhập tên khách hàng mới..."
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="SĐT"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                      />
+                      <Input
+                        placeholder="Địa chỉ"
+                        value={customerAddress}
+                        onChange={(e) => setCustomerAddress(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="sale-note">Ghi chú</Label>
@@ -391,8 +612,8 @@ export default function SalesPage() {
                       </div>
                       <div className="grid gap-1">
                         <Label className="text-xs text-muted-foreground">Giá bán *</Label>
-                        <Input type="number" min={0} value={item.sale_price}
-                          onChange={(e) => updateItem(idx, 'sale_price', Number(e.target.value))} />
+                        <CurrencyInput value={item.sale_price}
+                          onValueChange={(v) => updateItem(idx, 'sale_price', v)} />
                       </div>
                     </div>
                     <div className="flex justify-between text-sm">
@@ -436,8 +657,44 @@ export default function SalesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Hủy</Button>
             <Button onClick={handleSubmit} disabled={saving || items.length === 0}>
-              {saving ? 'Đang lưu...' : 'Tạo đơn bán'}
+              {saving ? 'Đang lưu...' : 'Tạo đơn xuất'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Dialog */}
+      <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Thanh toán đơn bán</DialogTitle>
+            <DialogDescription>
+              Tổng: {Number(payingSale?.total_revenue || 0).toLocaleString('vi-VN')} — Đã TT: {Number(payingSale?.amount_paid || 0).toLocaleString('vi-VN')} — Còn lại: {Number((payingSale?.total_revenue || 0) - (payingSale?.amount_paid || 0)).toLocaleString('vi-VN')} VND
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>Số tiền thanh toán *</Label>
+              <CurrencyInput value={payAmount}
+                onValueChange={(v) => setPayAmount(v)} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Phương thức *</Label>
+              <Select value={payMethod} onValueChange={setPayMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Ghi chú</Label>
+              <Input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="Ghi chú thanh toán" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Hủy</Button>
+            <Button onClick={handlePayment} disabled={payingSaving}>{payingSaving ? 'Đang xử lý...' : 'Xác nhận'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

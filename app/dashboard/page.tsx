@@ -16,6 +16,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, Package, ShoppingCart,
+  ArrowDownCircle, ArrowUpCircle, HandCoins, Banknote,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -31,6 +32,8 @@ interface DailyLoss { date: string; loss_cost: number }
 interface TopProductSales { product_id: string; product_name: string; quantity_sold: number; revenue: number; profit: number }
 interface TopProductLoss { product_id: string; product_name: string; quantity_lost: number; loss_cost: number }
 interface ExpiringBatch { product_id: string; product_name: string; batch_code: string; expired_date: string; quantity_remaining: number }
+interface ReceivableRow { customer_id: string | null; customer_name: string; total_receivable: number }
+interface PayableRow { supplier_id: string | null; supplier_name: string; total_payable: number }
 
 function formatDate(d: Date): string {
   return d.toISOString().split('T')[0]
@@ -64,7 +67,10 @@ export default function DashboardPage() {
   const [topSales, setTopSales] = useState<TopProductSales[]>([])
   const [topLoss, setTopLoss] = useState<TopProductLoss[]>([])
   const [expiringBatches, setExpiringBatches] = useState<ExpiringBatch[]>([])
-
+  const [receivables, setReceivables] = useState<ReceivableRow[]>([])
+  const [payables, setPayables] = useState<PayableRow[]>([])
+  const [cashIn, setCashIn] = useState(0)
+  const [cashOut, setCashOut] = useState(0)
   const loadWarehouses = useCallback(async () => {
     const { data } = await supabase.from('warehouses').select('id, name').order('name')
     if (data && data.length > 0) {
@@ -78,13 +84,17 @@ export default function DashboardPage() {
     setLoading(true)
     setError('')
     try {
-      const [summaryRes, salesRes, lossRes, topSalesRes, topLossRes, expiringRes] = await Promise.all([
+      const [summaryRes, salesRes, lossRes, topSalesRes, topLossRes, expiringRes, receivableRes, payableRes, paymentsInRes, paymentsOutRes] = await Promise.all([
         supabase.rpc('get_dashboard_summary', { p_warehouse_id: warehouseId, p_start_date: startDate, p_end_date: endDate }),
         supabase.rpc('get_daily_sales_report', { p_warehouse_id: warehouseId, p_start_date: startDate, p_end_date: endDate }),
         supabase.rpc('get_daily_loss_report', { p_warehouse_id: warehouseId, p_start_date: startDate, p_end_date: endDate }),
         supabase.rpc('get_top_products_sales', { p_warehouse_id: warehouseId, p_start_date: startDate, p_end_date: endDate, p_limit_n: 10 }),
         supabase.rpc('get_top_products_loss', { p_warehouse_id: warehouseId, p_start_date: startDate, p_end_date: endDate, p_limit_n: 10 }),
         supabase.rpc('get_expiring_batches', { p_warehouse_id: warehouseId, p_days_threshold: 30 }),
+        supabase.rpc('get_receivable_report', { p_warehouse_id: warehouseId }),
+        supabase.rpc('get_payable_report', { p_warehouse_id: warehouseId }),
+        supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'IN').gte('created_at', `${startDate}T00:00:00`).lte('created_at', `${endDate}T23:59:59`),
+        supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'OUT').gte('created_at', `${startDate}T00:00:00`).lte('created_at', `${endDate}T23:59:59`),
       ])
 
       if (summaryRes.error) throw summaryRes.error
@@ -100,6 +110,10 @@ export default function DashboardPage() {
       setTopSales(topSalesRes.data as TopProductSales[])
       setTopLoss(topLossRes.data as TopProductLoss[])
       setExpiringBatches(expiringRes.data as ExpiringBatch[])
+      setReceivables((receivableRes.data as ReceivableRow[]) || [])
+      setPayables((payableRes.data as PayableRow[]) || [])
+      setCashIn((paymentsInRes.data || []).reduce((s: number, p: { amount: number }) => s + Number(p.amount), 0))
+      setCashOut((paymentsOutRes.data || []).reduce((s: number, p: { amount: number }) => s + Number(p.amount), 0))
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Lỗi tải dữ liệu'
       setError(msg)
@@ -229,6 +243,67 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="text-2xl font-bold text-destructive">{formatVN(summary?.loss_total || 0)}</div>
                 <p className="text-xs text-muted-foreground">VND</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
+
+      {/* Debt & Cash KPI Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-32 mb-1" />
+                <Skeleton className="h-3 w-16" />
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Phải thu</CardTitle>
+                <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">{formatVN(receivables.reduce((s, r) => s + Number(r.total_receivable), 0))}</div>
+                <p className="text-xs text-muted-foreground">{receivables.length} khách hàng</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Phải trả</CardTitle>
+                <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">{formatVN(payables.reduce((s, r) => s + Number(r.total_payable), 0))}</div>
+                <p className="text-xs text-muted-foreground">{payables.length} nhà cung cấp</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Tiền thu</CardTitle>
+                <HandCoins className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{formatVN(cashIn)}</div>
+                <p className="text-xs text-muted-foreground">VND trong kỳ</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Tiền chi</CardTitle>
+                <Banknote className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-destructive">{formatVN(cashOut)}</div>
+                <p className="text-xs text-muted-foreground">VND trong kỳ</p>
               </CardContent>
             </Card>
           </>

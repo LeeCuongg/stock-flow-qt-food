@@ -33,6 +33,9 @@ import {
   ChevronUp,
   User2,
   Users,
+  UserCheck,
+  Truck,
+  CreditCard,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -53,7 +56,7 @@ const navItems = [
     icon: PackagePlus,
   },
   {
-    title: 'Bán hàng',
+    title: 'Xuất kho',
     url: '/sales',
     icon: ShoppingCart,
   },
@@ -66,6 +69,21 @@ const navItems = [
     title: 'Tồn kho',
     url: '/inventory',
     icon: Warehouse,
+  },
+  {
+    title: 'Khách hàng',
+    url: '/customers',
+    icon: UserCheck,
+  },
+  {
+    title: 'Nhà cung cấp',
+    url: '/suppliers',
+    icon: Truck,
+  },
+  {
+    title: 'Thanh toán',
+    url: '/payments',
+    icon: CreditCard,
   },
 ]
 

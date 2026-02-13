@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Plus, Pencil, Trash2, Search, Package } from 'lucide-react'
 import { toast } from 'sonner'
+import { CurrencyInput } from '@/components/ui/currency-input'
 
 interface Product {
   id: string
@@ -262,13 +263,13 @@ export default function ProductsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="cost">Giá nhập mặc định</Label>
-                <Input id="cost" type="number" min={0} value={form.default_cost_price}
-                  onChange={(e) => setForm({ ...form, default_cost_price: Number(e.target.value) })} />
+                <CurrencyInput id="cost" value={form.default_cost_price}
+                  onValueChange={(v) => setForm({ ...form, default_cost_price: v })} />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="sale">Giá bán mặc định</Label>
-                <Input id="sale" type="number" min={0} value={form.default_sale_price}
-                  onChange={(e) => setForm({ ...form, default_sale_price: Number(e.target.value) })} />
+                <CurrencyInput id="sale" value={form.default_sale_price}
+                  onValueChange={(v) => setForm({ ...form, default_sale_price: v })} />
               </div>
             </div>
           </div>

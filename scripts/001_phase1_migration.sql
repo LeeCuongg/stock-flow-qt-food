@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS public.stock_in_items (
   total_price NUMERIC(14,2) NOT NULL DEFAULT 0
 );
 
--- 5. SALES (phiếu bán hàng)
+-- 5. SALES (phiếu xuất kho)
 CREATE TABLE IF NOT EXISTS public.sales (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   warehouse_id UUID NOT NULL REFERENCES public.warehouses(id) ON DELETE CASCADE,

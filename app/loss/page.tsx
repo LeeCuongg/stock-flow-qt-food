@@ -76,6 +76,10 @@ export default function LossPage() {
   const [note, setNote] = useState('')
   const [productSearch, setProductSearch] = useState('')
 
+  // Detail modal
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailRecord, setDetailRecord] = useState<LossRecord | null>(null)
+
   const supabase = createClient()
 
   const loadRecords = useCallback(async () => {
@@ -264,7 +268,7 @@ export default function LossPage() {
               </TableHeader>
               <TableBody>
                 {filteredRecords.map((r) => (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} className="cursor-pointer" onClick={() => { setDetailRecord(r); setDetailOpen(true) }}>
                     <TableCell className="text-sm">{new Date(r.created_at).toLocaleDateString('vi-VN')}</TableCell>
                     <TableCell className="font-medium">{r.products?.name || '-'}</TableCell>
                     <TableCell className="font-mono text-xs">{r.inventory_batches?.batch_code || '-'}</TableCell>
@@ -288,6 +292,35 @@ export default function LossPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Loss Detail Dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chi tiết hao hụt</DialogTitle>
+            <DialogDescription>
+              {detailRecord ? new Date(detailRecord.created_at).toLocaleString('vi-VN') : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {detailRecord && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div><span className="text-muted-foreground">Sản phẩm:</span><br/><span className="font-medium">{detailRecord.products?.name || '-'}</span></div>
+                <div><span className="text-muted-foreground">Đơn vị:</span><br/>{detailRecord.products?.unit || '-'}</div>
+                <div><span className="text-muted-foreground">Mã lô:</span><br/><span className="font-mono">{detailRecord.inventory_batches?.batch_code || '-'}</span></div>
+                <div><span className="text-muted-foreground">HSD:</span><br/>{detailRecord.inventory_batches?.expiry_date ? new Date(detailRecord.inventory_batches.expiry_date).toLocaleDateString('vi-VN') : '-'}</div>
+                <div><span className="text-muted-foreground">Số lượng:</span><br/><span className="font-medium">{Number(detailRecord.quantity).toLocaleString('vi-VN')}</span></div>
+                <div><span className="text-muted-foreground">Lý do:</span><br/><Badge variant={reasonBadgeVariant(detailRecord.reason)}>{reasonLabel(detailRecord.reason)}</Badge></div>
+                <div><span className="text-muted-foreground">Giá vốn:</span><br/>{Number(detailRecord.cost_price).toLocaleString('vi-VN')} VND</div>
+                <div><span className="text-muted-foreground">Tổng thiệt hại:</span><br/><span className="font-medium text-destructive">{Number(detailRecord.total_loss_cost).toLocaleString('vi-VN')} VND</span></div>
+              </div>
+              {detailRecord.note && (
+                <div><span className="text-muted-foreground">Ghi chú:</span><br/>{detailRecord.note}</div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Create Loss Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

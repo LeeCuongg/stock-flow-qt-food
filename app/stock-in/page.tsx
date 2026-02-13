@@ -17,8 +17,19 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, PackagePlus } from 'lucide-react'
+import { Plus, Trash2, PackagePlus, CreditCard } from 'lucide-react'
 import { toast } from 'sonner'
+import { CurrencyInput } from '@/components/ui/currency-input'
+
+interface Supplier { id: string; name: string }
+
+const PAYMENT_METHODS = [
+  { value: 'CASH', label: 'Tiền mặt' },
+  { value: 'BANK', label: 'Chuyển khoản' },
+  { value: 'MOMO', label: 'MoMo' },
+  { value: 'ZALOPAY', label: 'ZaloPay' },
+  { value: 'OTHER', label: 'Khác' },
+]
 
 interface Product {
   id: string
@@ -41,10 +52,31 @@ interface StockInItem {
 interface StockInRecord {
   id: string
   supplier_name: string | null
+  supplier_id: string | null
   note: string | null
   total_amount: number
+  amount_paid: number
+  payment_status: string
   created_at: string
   warehouse_id: string
+}
+
+interface StockInDetail {
+  id: string
+  supplier_name: string | null
+  note: string | null
+  total_amount: number
+  amount_paid: number
+  payment_status: string
+  created_at: string
+  stock_in_items: {
+    quantity: number
+    cost_price: number
+    total_price: number
+    batch_code: string | null
+    expired_date: string | null
+    products: { name: string; unit: string } | null
+  }[]
 }
 
 export default function StockInPage() {
@@ -54,9 +86,24 @@ export default function StockInPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [supplierName, setSupplierName] = useState('')
+  const [supplierPhone, setSupplierPhone] = useState('')
+  const [supplierAddress, setSupplierAddress] = useState('')
+  const [selectedSupplierId, setSelectedSupplierId] = useState('')
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [note, setNote] = useState('')
   const [items, setItems] = useState<StockInItem[]>([])
   const [productSearch, setProductSearch] = useState('')
+  // Payment modal
+  const [payDialogOpen, setPayDialogOpen] = useState(false)
+  const [payingRecord, setPayingRecord] = useState<StockInRecord | null>(null)
+  const [payAmount, setPayAmount] = useState(0)
+  const [payMethod, setPayMethod] = useState('CASH')
+  const [payNote, setPayNote] = useState('')
+  const [payingSaving, setPayingSaving] = useState(false)
+  // Detail modal
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detail, setDetail] = useState<StockInDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const supabase = createClient()
 
   const loadRecords = useCallback(async () => {
@@ -78,10 +125,16 @@ export default function StockInPage() {
     setProducts(data || [])
   }, [])
 
+  const loadSuppliers = useCallback(async () => {
+    const { data } = await supabase.from('suppliers').select('id, name').order('name')
+    setSuppliers(data || [])
+  }, [])
+
   useEffect(() => {
     loadRecords()
     loadProducts()
-  }, [loadRecords, loadProducts])
+    loadSuppliers()
+  }, [loadRecords, loadProducts, loadSuppliers])
 
   const filteredProducts = products.filter(
     (p) =>
@@ -91,6 +144,9 @@ export default function StockInPage() {
 
   const openCreate = () => {
     setSupplierName('')
+    setSupplierPhone('')
+    setSupplierAddress('')
+    setSelectedSupplierId('')
     setNote('')
     setItems([])
     setProductSearch('')
@@ -123,6 +179,46 @@ export default function StockInPage() {
 
   const totalCost = items.reduce((sum, item) => sum + item.quantity * item.cost_price, 0)
 
+  const openStockInPayment = (record: StockInRecord) => {
+    setPayingRecord(record)
+    setPayAmount(record.total_amount - record.amount_paid)
+    setPayMethod('CASH')
+    setPayNote('')
+    setPayDialogOpen(true)
+  }
+
+  const handleStockInPayment = async () => {
+    if (!payingRecord || payAmount <= 0) { toast.error('Số tiền phải > 0'); return }
+    setPayingSaving(true)
+    try {
+      const { error } = await supabase.rpc('add_stock_in_payment', {
+        p_stock_in_id: payingRecord.id,
+        p_amount: payAmount,
+        p_payment_method: payMethod,
+        p_note: payNote.trim() || null,
+      })
+      if (error) throw error
+      toast.success('Chi tiền thành công')
+      setPayDialogOpen(false)
+      loadRecords()
+    } catch (err: unknown) { toast.error(`Lỗi: ${err instanceof Error ? err.message : 'Không xác định'}`) }
+    finally { setPayingSaving(false) }
+  }
+
+  const openDetail = async (record: StockInRecord) => {
+    setDetailOpen(true)
+    setDetail(null)
+    setDetailLoading(true)
+    const { data, error } = await supabase
+      .from('stock_in')
+      .select('id, supplier_name, note, total_amount, amount_paid, payment_status, created_at, stock_in_items(quantity, cost_price, total_price, batch_code, expired_date, products(name, unit))')
+      .eq('id', record.id)
+      .single()
+    if (error) toast.error('Lỗi tải chi tiết')
+    else setDetail(data as unknown as StockInDetail)
+    setDetailLoading(false)
+  }
+
   const handleSubmit = async () => {
     if (items.length === 0) {
       toast.error('Vui lòng thêm ít nhất 1 sản phẩm')
@@ -153,6 +249,18 @@ export default function StockInPage() {
         return
       }
 
+      let supplierId = selectedSupplierId || null
+      // Auto-create supplier if new name entered
+      if (!supplierId && supplierName.trim()) {
+        const { data: newSupplier, error: sErr } = await supabase
+          .from('suppliers')
+          .insert({ name: supplierName.trim(), phone: supplierPhone.trim() || null, address: supplierAddress.trim() || null, warehouse_id: warehouseId })
+          .select('id')
+          .single()
+        if (sErr) throw sErr
+        supplierId = newSupplier.id
+      }
+
       const rpcItems = items.map((item) => ({
         product_id: item.product_id,
         batch_code: item.batch_code.trim(),
@@ -166,12 +274,14 @@ export default function StockInPage() {
         p_supplier_name: supplierName.trim() || null,
         p_note: note.trim() || null,
         p_items: rpcItems,
+        p_supplier_id: supplierId,
       })
 
       if (error) throw error
       toast.success('Tạo phiếu nhập kho thành công')
       setDialogOpen(false)
       loadRecords()
+      loadSuppliers()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Lỗi không xác định'
       toast.error(`Lỗi: ${message}`)
@@ -211,18 +321,34 @@ export default function StockInPage() {
                 <TableRow>
                   <TableHead>Ngày tạo</TableHead>
                   <TableHead>Nhà cung cấp</TableHead>
-                  <TableHead>Ghi chú</TableHead>
-                  <TableHead className="text-right">Tổng tiền (VND)</TableHead>
+                  <TableHead className="text-right">Tổng tiền</TableHead>
+                  <TableHead className="text-right">Đã TT</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {records.map((r) => (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} className="cursor-pointer" onClick={() => openDetail(r)}>
                     <TableCell>{new Date(r.created_at).toLocaleDateString('vi-VN')}</TableCell>
                     <TableCell>{r.supplier_name || '-'}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{r.note || '-'}</TableCell>
                     <TableCell className="text-right font-medium">
                       {Number(r.total_amount).toLocaleString('vi-VN')}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {Number(r.amount_paid).toLocaleString('vi-VN')}
+                    </TableCell>
+                    <TableCell>
+                      {r.payment_status === 'PAID' ? <Badge className="bg-green-600 text-white hover:bg-green-700">Đã TT</Badge>
+                        : r.payment_status === 'PARTIAL' ? <Badge className="bg-yellow-500 text-white hover:bg-yellow-600">TT một phần</Badge>
+                        : <Badge variant="destructive">Chưa TT</Badge>}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.payment_status !== 'PAID' && (
+                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openStockInPayment(r) }}>
+                          <CreditCard className="mr-1 h-3 w-3" /> Chi tiền
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -231,6 +357,54 @@ export default function StockInPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Detail Dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Chi tiết phiếu nhập</DialogTitle>
+            <DialogDescription>
+              {detail ? new Date(detail.created_at).toLocaleString('vi-VN') : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {detailLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Đang tải...</div>
+          ) : detail && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div><span className="text-muted-foreground">NCC:</span> {detail.supplier_name || '-'}</div>
+                <div><span className="text-muted-foreground">Ghi chú:</span> {detail.note || '-'}</div>
+                <div><span className="text-muted-foreground">Tổng tiền:</span> <span className="font-medium">{Number(detail.total_amount).toLocaleString('vi-VN')} VND</span></div>
+                <div><span className="text-muted-foreground">Đã TT:</span> {Number(detail.amount_paid).toLocaleString('vi-VN')} VND</div>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sản phẩm</TableHead>
+                    <TableHead>Mã lô</TableHead>
+                    <TableHead>HSD</TableHead>
+                    <TableHead className="text-right">SL</TableHead>
+                    <TableHead className="text-right">Đơn giá</TableHead>
+                    <TableHead className="text-right">Thành tiền</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {detail.stock_in_items.map((item, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">{item.products?.name || '-'}</TableCell>
+                      <TableCell className="font-mono text-xs">{item.batch_code || '-'}</TableCell>
+                      <TableCell className="text-sm">{item.expired_date ? new Date(item.expired_date).toLocaleDateString('vi-VN') : '-'}</TableCell>
+                      <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell className="text-right font-medium">{Number(item.total_price).toLocaleString('vi-VN')}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Create Stock-In Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -243,8 +417,46 @@ export default function StockInPage() {
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="supplier">Nhà cung cấp</Label>
-                <Input id="supplier" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Tên nhà cung cấp" />
+                <Label>Nhà cung cấp</Label>
+                <Select value={selectedSupplierId} onValueChange={(val) => {
+                  if (val === 'none') {
+                    setSelectedSupplierId('')
+                    setSupplierName('')
+                  } else {
+                    setSelectedSupplierId(val)
+                    const s = suppliers.find((s) => s.id === val)
+                    if (s) setSupplierName(s.name)
+                  }
+                }}>
+                  <SelectTrigger><SelectValue placeholder="Chọn NCC..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Nhập tay --</SelectItem>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!selectedSupplierId && (
+                  <>
+                    <Input
+                      placeholder="Nhập tên NCC mới..."
+                      value={supplierName}
+                      onChange={(e) => setSupplierName(e.target.value)}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="SĐT"
+                        value={supplierPhone}
+                        onChange={(e) => setSupplierPhone(e.target.value)}
+                      />
+                      <Input
+                        placeholder="Địa chỉ"
+                        value={supplierAddress}
+                        onChange={(e) => setSupplierAddress(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="note">Ghi chú</Label>
@@ -319,8 +531,8 @@ export default function StockInPage() {
                       </div>
                       <div className="grid gap-1">
                         <Label className="text-xs text-muted-foreground">Giá nhập *</Label>
-                        <Input type="number" min={0} value={item.cost_price}
-                          onChange={(e) => updateItem(idx, 'cost_price', Number(e.target.value))} />
+                        <CurrencyInput value={item.cost_price}
+                          onValueChange={(v) => updateItem(idx, 'cost_price', v)} />
                       </div>
                     </div>
                     <div className="text-right text-sm text-muted-foreground">
@@ -342,6 +554,42 @@ export default function StockInPage() {
             <Button onClick={handleSubmit} disabled={saving || items.length === 0}>
               {saving ? 'Đang lưu...' : 'Tạo phiếu nhập'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Dialog */}
+      <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chi tiền phiếu nhập</DialogTitle>
+            <DialogDescription>
+              Tổng: {Number(payingRecord?.total_amount || 0).toLocaleString('vi-VN')} — Đã TT: {Number(payingRecord?.amount_paid || 0).toLocaleString('vi-VN')} — Còn lại: {Number((payingRecord?.total_amount || 0) - (payingRecord?.amount_paid || 0)).toLocaleString('vi-VN')} VND
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>Số tiền *</Label>
+              <CurrencyInput value={payAmount}
+                onValueChange={(v) => setPayAmount(v)} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Phương thức *</Label>
+              <Select value={payMethod} onValueChange={setPayMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Ghi chú</Label>
+              <Input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="Ghi chú" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Hủy</Button>
+            <Button onClick={handleStockInPayment} disabled={payingSaving}>{payingSaving ? 'Đang xử lý...' : 'Xác nhận'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
