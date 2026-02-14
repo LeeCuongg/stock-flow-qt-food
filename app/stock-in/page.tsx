@@ -17,7 +17,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, PackagePlus, CreditCard } from 'lucide-react'
+import { Plus, Trash2, PackagePlus, CreditCard, Eye, Pencil } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
 
@@ -105,13 +106,19 @@ export default function StockInPage() {
   const [detail, setDetail] = useState<StockInDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [supplierPrices, setSupplierPrices] = useState<Record<string, number>>({})
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [cancellingRecord, setCancellingRecord] = useState<StockInRecord | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelSaving, setCancelSaving] = useState(false)
   const supabase = createClient()
+  const router = useRouter()
 
   const loadRecords = useCallback(async () => {
     setIsLoading(true)
     const { data, error } = await supabase
       .from('stock_in')
       .select('*')
+      .neq('status', 'CANCELLED')
       .order('created_at', { ascending: false })
     if (error) toast.error('Lỗi tải phiếu nhập')
     else setRecords(data || [])
@@ -172,14 +179,33 @@ export default function StockInPage() {
     setDialogOpen(true)
   }
 
-  const addItem = (product: Product) => {
+  const generateBatchCode = useCallback(async (productId: string): Promise<string> => {
+    try {
+      const { data, error } = await supabase.rpc('generate_batch_code', {
+        p_product_id: productId,
+        p_date: new Date().toISOString().split('T')[0],
+      })
+      if (error) throw error
+      return data as string
+    } catch {
+      // Fallback: sinh mã lô phía client
+      const product = products.find(p => p.id === productId)
+      const prefix = product?.sku ? product.sku.toUpperCase() : (product?.name || 'PROD').substring(0, 4).toUpperCase().replace(/\s/g, '')
+      const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '')
+      const existingCount = items.filter(i => i.batch_code.startsWith(`${prefix}-${dateStr}-`)).length
+      return `${prefix}-${dateStr}-${String(existingCount + 1).padStart(3, '0')}`
+    }
+  }, [products, items])
+
+  const addItem = async (product: Product) => {
+    const batchCode = await generateBatchCode(product.id)
     setItems((prev) => [
       ...prev,
       {
         product_id: product.id,
         product_name: product.name,
         product_unit: product.unit,
-        batch_code: '',
+        batch_code: batchCode,
         expired_date: '',
         quantity: 1,
         cost_price: supplierPrices[product.id] ?? product.default_cost_price ?? 0,
@@ -236,6 +262,29 @@ export default function StockInPage() {
     if (error) toast.error('Lỗi tải chi tiết')
     else setDetail(data as unknown as StockInDetail)
     setDetailLoading(false)
+  }
+
+  const openCancelDialog = (record: StockInRecord) => {
+    setCancellingRecord(record)
+    setCancelReason('')
+    setCancelDialogOpen(true)
+  }
+
+  const handleCancelStockIn = async () => {
+    if (!cancellingRecord) return
+    setCancelSaving(true)
+    try {
+      const { error } = await supabase.rpc('cancel_stock_in', {
+        p_stock_in_id: cancellingRecord.id,
+        p_reason: cancelReason.trim() || 'Huỷ phiếu nhập',
+      })
+      if (error) throw error
+      toast.success('Đã huỷ phiếu nhập')
+      setCancelDialogOpen(false)
+      loadRecords()
+    } catch (err: unknown) {
+      toast.error(`Lỗi: ${err instanceof Error ? err.message : 'Không xác định'}`)
+    } finally { setCancelSaving(false) }
   }
 
   const handleSubmit = async () => {
@@ -363,11 +412,22 @@ export default function StockInPage() {
                         : <Badge variant="destructive">Chưa TT</Badge>}
                     </TableCell>
                     <TableCell className="text-right">
-                      {r.payment_status !== 'PAID' && (
-                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openStockInPayment(r) }}>
-                          <CreditCard className="mr-1 h-3 w-3" /> Chi tiền
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}`) }}>
+                          <Eye className="mr-1 h-3 w-3" /> Xem
                         </Button>
-                      )}
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}/edit`) }}>
+                          <Pencil className="mr-1 h-3 w-3" /> Sửa
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); openCancelDialog(r) }}>
+                          <Trash2 className="mr-1 h-3 w-3" /> Huỷ
+                        </Button>
+                        {r.payment_status !== 'PAID' && (
+                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openStockInPayment(r) }}>
+                            <CreditCard className="mr-1 h-3 w-3" /> Chi tiền
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -536,9 +596,9 @@ export default function StockInPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="grid gap-1">
-                        <Label className="text-xs text-muted-foreground">Mã lô *</Label>
+                        <Label className="text-xs text-muted-foreground">Mã lô * (tự sinh)</Label>
                         <Input value={item.batch_code}
-                          onChange={(e) => updateItem(idx, 'batch_code', e.target.value)} placeholder="VD: LOT-001" />
+                          onChange={(e) => updateItem(idx, 'batch_code', e.target.value)} placeholder="VD: SP001-20260214-001" />
                       </div>
                       <div className="grid gap-1">
                         <Label className="text-xs text-muted-foreground">Hạn sử dụng</Label>
@@ -611,6 +671,28 @@ export default function StockInPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Hủy</Button>
             <Button onClick={handleStockInPayment} disabled={payingSaving}>{payingSaving ? 'Đang xử lý...' : 'Xác nhận'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận huỷ phiếu nhập</DialogTitle>
+            <DialogDescription>
+              Tồn kho sẽ được hoàn trả. Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <Label>Lý do huỷ</Label>
+            <Input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Nhập lý do..." />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>Đóng</Button>
+            <Button variant="destructive" onClick={handleCancelStockIn} disabled={cancelSaving}>
+              {cancelSaving ? 'Đang huỷ...' : 'Xác nhận huỷ'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

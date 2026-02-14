@@ -17,7 +17,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, ShoppingCart, CreditCard } from 'lucide-react'
+import { Plus, Trash2, ShoppingCart, CreditCard, Eye, Pencil } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
 
@@ -122,13 +123,19 @@ export default function SalesPage() {
   const [saleDetail, setSaleDetail] = useState<SaleDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [customerPrices, setCustomerPrices] = useState<Record<string, number>>({})
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [cancellingSale, setCancellingSale] = useState<SaleRecord | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelSaving, setCancelSaving] = useState(false)
   const supabase = createClient()
+  const router = useRouter()
 
   const loadRecords = useCallback(async () => {
     setIsLoading(true)
     const { data, error } = await supabase
       .from('sales')
       .select('id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, created_at')
+      .neq('status', 'CANCELLED')
       .order('created_at', { ascending: false })
     if (error) toast.error('Lỗi tải đơn bán')
     else setRecords(data || [])
@@ -361,6 +368,30 @@ export default function SalesPage() {
     setDetailLoading(false)
   }
 
+  const openCancelDialog = (record: SaleRecord) => {
+    setCancellingSale(record)
+    setCancelReason('')
+    setCancelDialogOpen(true)
+  }
+
+  const handleCancelSale = async () => {
+    if (!cancellingSale) return
+    setCancelSaving(true)
+    try {
+      const { error } = await supabase.rpc('cancel_sale', {
+        p_sale_id: cancellingSale.id,
+        p_reason: cancelReason.trim() || 'Huỷ đơn xuất',
+      })
+      if (error) throw error
+      toast.success('Đã huỷ đơn xuất')
+      setCancelDialogOpen(false)
+      loadRecords()
+      loadBatches()
+    } catch (err: unknown) {
+      toast.error(`Lỗi: ${err instanceof Error ? err.message : 'Không xác định'}`)
+    } finally { setCancelSaving(false) }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -417,11 +448,22 @@ export default function SalesPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      {r.payment_status !== 'PAID' && (
-                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openPayment(r) }}>
-                          <CreditCard className="mr-1 h-3 w-3" /> Thanh toán
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/sales/${r.id}`) }}>
+                          <Eye className="mr-1 h-3 w-3" /> Xem
                         </Button>
-                      )}
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/sales/${r.id}/edit`) }}>
+                          <Pencil className="mr-1 h-3 w-3" /> Sửa
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); openCancelDialog(r) }}>
+                          <Trash2 className="mr-1 h-3 w-3" /> Huỷ
+                        </Button>
+                        {r.payment_status !== 'PAID' && (
+                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openPayment(r) }}>
+                            <CreditCard className="mr-1 h-3 w-3" /> Thanh toán
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -716,6 +758,28 @@ export default function SalesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Hủy</Button>
             <Button onClick={handlePayment} disabled={payingSaving}>{payingSaving ? 'Đang xử lý...' : 'Xác nhận'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận huỷ đơn xuất</DialogTitle>
+            <DialogDescription>
+              Tồn kho sẽ được hoàn trả. Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <Label>Lý do huỷ</Label>
+            <Input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Nhập lý do..." />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>Đóng</Button>
+            <Button variant="destructive" onClick={handleCancelSale} disabled={cancelSaving}>
+              {cancelSaving ? 'Đang huỷ...' : 'Xác nhận huỷ'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
