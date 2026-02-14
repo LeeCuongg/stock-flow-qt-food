@@ -104,6 +104,7 @@ export default function StockInPage() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [detail, setDetail] = useState<StockInDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [supplierPrices, setSupplierPrices] = useState<Record<string, number>>({})
   const supabase = createClient()
 
   const loadRecords = useCallback(async () => {
@@ -136,6 +137,24 @@ export default function StockInPage() {
     loadSuppliers()
   }, [loadRecords, loadProducts, loadSuppliers])
 
+  const loadSupplierPrices = useCallback(async (supplierId: string) => {
+    if (!supplierId) {
+      setSupplierPrices({})
+      return
+    }
+    const { data } = await supabase
+      .from('supplier_product_prices')
+      .select('product_id, cost_price')
+      .eq('supplier_id', supplierId)
+    if (data) {
+      const map: Record<string, number> = {}
+      data.forEach((row: { product_id: string; cost_price: number }) => {
+        map[row.product_id] = row.cost_price
+      })
+      setSupplierPrices(map)
+    }
+  }, [])
+
   const filteredProducts = products.filter(
     (p) =>
       p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
@@ -163,7 +182,7 @@ export default function StockInPage() {
         batch_code: '',
         expired_date: '',
         quantity: 1,
-        cost_price: product.default_cost_price || 0,
+        cost_price: supplierPrices[product.id] ?? product.default_cost_price ?? 0,
       },
     ])
     setProductSearch('')
@@ -422,10 +441,12 @@ export default function StockInPage() {
                   if (val === 'none') {
                     setSelectedSupplierId('')
                     setSupplierName('')
+                    setSupplierPrices({})
                   } else {
                     setSelectedSupplierId(val)
                     const s = suppliers.find((s) => s.id === val)
                     if (s) setSupplierName(s.name)
+                    loadSupplierPrices(val)
                   }
                 }}>
                   <SelectTrigger><SelectValue placeholder="Chọn NCC..." /></SelectTrigger>

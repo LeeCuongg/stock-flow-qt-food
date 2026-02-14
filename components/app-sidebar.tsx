@@ -36,6 +36,7 @@ import {
   UserCheck,
   Truck,
   CreditCard,
+  Tags,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -44,6 +45,11 @@ const navItems = [
     title: 'Tổng quan',
     url: '/dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    title: 'Danh mục',
+    url: '/categories',
+    icon: Tags,
   },
   {
     title: 'Sản phẩm',

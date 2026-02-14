@@ -121,6 +121,7 @@ export default function SalesPage() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [saleDetail, setSaleDetail] = useState<SaleDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [customerPrices, setCustomerPrices] = useState<Record<string, number>>({})
   const supabase = createClient()
 
   const loadRecords = useCallback(async () => {
@@ -162,6 +163,24 @@ export default function SalesPage() {
     loadBatches()
     loadCustomers()
   }, [loadRecords, loadProducts, loadBatches, loadCustomers])
+
+  const loadCustomerPrices = useCallback(async (customerId: string) => {
+    if (!customerId) {
+      setCustomerPrices({})
+      return
+    }
+    const { data } = await supabase
+      .from('customer_product_prices')
+      .select('product_id, sale_price')
+      .eq('customer_id', customerId)
+    if (data) {
+      const map: Record<string, number> = {}
+      data.forEach((row: { product_id: string; sale_price: number }) => {
+        map[row.product_id] = row.sale_price
+      })
+      setCustomerPrices(map)
+    }
+  }, [])
 
   const filteredProducts = products.filter(
     (p) =>
@@ -206,7 +225,7 @@ export default function SalesPage() {
         batch_cost_price: batch.cost_price,
         expiry_date: batch.expiry_date,
         quantity: 1,
-        sale_price: product.default_sale_price || 0,
+        sale_price: customerPrices[product.id] ?? product.default_sale_price ?? 0,
       },
     ])
     setSelectedProductId('')
@@ -478,10 +497,12 @@ export default function SalesPage() {
                   if (val === 'none') {
                     setSelectedCustomerId('')
                     setCustomerName('')
+                    setCustomerPrices({})
                   } else {
                     setSelectedCustomerId(val)
                     const c = customers.find((c) => c.id === val)
                     if (c) setCustomerName(c.name)
+                    loadCustomerPrices(val)
                   }
                 }}>
                   <SelectTrigger><SelectValue placeholder="Chọn khách hàng..." /></SelectTrigger>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -17,9 +17,16 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { Plus, Pencil, Trash2, Search, Package } from 'lucide-react'
 import { toast } from 'sonner'
-import { CurrencyInput } from '@/components/ui/currency-input'
+
+interface Category {
+  id: string
+  name: string
+}
 
 interface Product {
   id: string
@@ -27,24 +34,24 @@ interface Product {
   sku: string | null
   unit: string
   category: string | null
-  price: number
-  default_cost_price: number
-  default_sale_price: number
+  category_id: string | null
   warehouse_id: string
   created_at: string
+  product_categories?: { name: string } | null
 }
 
 const emptyForm = {
   name: '',
   sku: '',
   unit: 'kg',
-  default_cost_price: 0,
-  default_sale_price: 0,
+  category_id: '',
 }
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [search, setSearch] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -54,11 +61,22 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
+  const loadCategories = useCallback(async () => {
+    const { data } = await supabase.from('product_categories').select('id, name').order('name')
+    setCategories(data || [])
+  }, [])
+
   const loadProducts = useCallback(async () => {
     setIsLoading(true)
-    let query = supabase.from('products').select('*').order('created_at', { ascending: false })
+    let query = supabase
+      .from('products')
+      .select('*, product_categories(name)')
+      .order('created_at', { ascending: false })
     if (search.trim()) {
       query = query.or(`name.ilike.%${search.trim()}%,sku.ilike.%${search.trim()}%`)
+    }
+    if (filterCategory) {
+      query = query.eq('category_id', filterCategory)
     }
     const { data, error } = await query
     if (error) {
@@ -67,11 +85,10 @@ export default function ProductsPage() {
       setProducts(data || [])
     }
     setIsLoading(false)
-  }, [search])
+  }, [search, filterCategory])
 
-  useEffect(() => {
-    loadProducts()
-  }, [loadProducts])
+  useEffect(() => { loadCategories() }, [loadCategories])
+  useEffect(() => { loadProducts() }, [loadProducts])
 
   const openCreate = () => {
     setEditingProduct(null)
@@ -85,8 +102,7 @@ export default function ProductsPage() {
       name: product.name,
       sku: product.sku || '',
       unit: product.unit,
-      default_cost_price: product.default_cost_price || 0,
-      default_sale_price: product.default_sale_price || 0,
+      category_id: product.category_id || '',
     })
     setDialogOpen(true)
   }
@@ -110,15 +126,12 @@ export default function ProductsPage() {
             name: form.name.trim(),
             sku: form.sku.trim() || null,
             unit: form.unit.trim(),
-            default_cost_price: form.default_cost_price,
-            default_sale_price: form.default_sale_price,
-            price: form.default_sale_price,
+            category_id: form.category_id || null,
           })
           .eq('id', editingProduct.id)
         if (error) throw error
         toast.success('Cập nhật sản phẩm thành công')
       } else {
-        // Get first warehouse
         const { data: warehouses } = await supabase.from('warehouses').select('id').limit(1)
         const warehouseId = warehouses?.[0]?.id
         if (!warehouseId) {
@@ -129,9 +142,7 @@ export default function ProductsPage() {
           name: form.name.trim(),
           sku: form.sku.trim() || null,
           unit: form.unit.trim(),
-          default_cost_price: form.default_cost_price,
-          default_sale_price: form.default_sale_price,
-          price: form.default_sale_price,
+          category_id: form.category_id || null,
           warehouse_id: warehouseId,
         })
         if (error) throw error
@@ -175,7 +186,7 @@ export default function ProductsPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Tìm theo tên hoặc SKU..."
@@ -183,6 +194,22 @@ export default function ProductsPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-sm"
             />
+            <Select value={filterCategory || 'all'} onValueChange={(v) => setFilterCategory(v === 'all' ? '' : v)}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Tất cả danh mục" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả danh mục</SelectItem>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {filterCategory && (
+              <Button variant="ghost" size="sm" onClick={() => setFilterCategory('')}>
+                Xóa lọc
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -200,9 +227,8 @@ export default function ProductsPage() {
                 <TableRow>
                   <TableHead>SKU</TableHead>
                   <TableHead>Tên sản phẩm</TableHead>
+                  <TableHead>Danh mục</TableHead>
                   <TableHead>Đơn vị</TableHead>
-                  <TableHead className="text-right">Giá nhập</TableHead>
-                  <TableHead className="text-right">Giá bán</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
@@ -211,13 +237,14 @@ export default function ProductsPage() {
                   <TableRow key={p.id}>
                     <TableCell className="font-mono text-xs">{p.sku || '-'}</TableCell>
                     <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell>
+                      {p.product_categories?.name ? (
+                        <Badge variant="outline">{p.product_categories.name}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
                     <TableCell><Badge variant="secondary">{p.unit}</Badge></TableCell>
-                    <TableCell className="text-right">
-                      {Number(p.default_cost_price || 0).toLocaleString('vi-VN')}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {Number(p.default_sale_price || 0).toLocaleString('vi-VN')}
-                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
@@ -260,17 +287,19 @@ export default function ProductsPage() {
                 <Input id="unit" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="cost">Giá nhập mặc định</Label>
-                <CurrencyInput id="cost" value={form.default_cost_price}
-                  onValueChange={(v) => setForm({ ...form, default_cost_price: v })} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="sale">Giá bán mặc định</Label>
-                <CurrencyInput id="sale" value={form.default_sale_price}
-                  onValueChange={(v) => setForm({ ...form, default_sale_price: v })} />
-              </div>
+            <div className="grid gap-2">
+              <Label htmlFor="category">Danh mục</Label>
+              <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v === 'none' ? '' : v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn danh mục" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Không có danh mục</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
