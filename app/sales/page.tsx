@@ -17,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, ShoppingCart, CreditCard, Eye, Pencil, Search, X } from 'lucide-react'
+import { Plus, Trash2, ShoppingCart, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
@@ -185,6 +185,9 @@ export default function SalesPage() {
   const [filterDatePreset, setFilterDatePreset] = useState('all')
   const [filterCustomerId, setFilterCustomerId] = useState('')
   const [filterPaymentStatus, setFilterPaymentStatus] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+  const pageSize = 50
   const supabase = createClient()
   const router = useRouter()
 
@@ -192,18 +195,21 @@ export default function SalesPage() {
     setIsLoading(true)
     let query = supabase
       .from('sales')
-      .select('id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, created_at')
+      .select('id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, created_at', { count: 'exact' })
       .neq('status', 'CANCELLED')
     if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00')
     if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59')
     if (filterCustomerId) query = query.eq('customer_id', filterCustomerId)
     if (filterPaymentStatus) query = query.eq('payment_status', filterPaymentStatus)
-    query = query.order('created_at', { ascending: false })
-    const { data, error } = await query
+    query = query.order('created_at', { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1)
+    const { data, error, count } = await query
     if (error) toast.error('Lỗi tải đơn bán')
-    else setRecords(data || [])
+    else {
+      setRecords(data || [])
+      setTotalCount(count || 0)
+    }
     setIsLoading(false)
-  }, [filterDateFrom, filterDateTo, filterCustomerId, filterPaymentStatus])
+  }, [filterDateFrom, filterDateTo, filterCustomerId, filterPaymentStatus, page])
 
   const loadProducts = useCallback(async () => {
     const { data } = await supabase
@@ -527,11 +533,11 @@ export default function SalesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button variant="outline" size="sm" className="h-9" onClick={() => loadRecords()}>
+            <Button variant="outline" size="sm" className="h-9" onClick={() => { setPage(0); loadRecords() }}>
               <Search className="mr-1 h-3 w-3" /> Lọc
             </Button>
             {(filterDatePreset !== 'all' || filterCustomerId || filterPaymentStatus) && (
-              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterCustomerId(''); setFilterPaymentStatus('') }}>
+              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterCustomerId(''); setFilterPaymentStatus(''); setPage(0) }}>
                 <X className="mr-1 h-3 w-3" /> Xoá lọc
               </Button>
             )}
@@ -584,9 +590,6 @@ export default function SalesPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/sales/${r.id}`) }}>
-                          <Eye className="mr-1 h-3 w-3" /> Xem
-                        </Button>
                         {Number(r.amount_paid) === 0 && (
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/sales/${r.id}/edit`) }}>
                             <Pencil className="mr-1 h-3 w-3" /> Sửa
@@ -609,6 +612,23 @@ export default function SalesPage() {
               </TableBody>
             </Table>
           )}
+          {/* Pagination */}
+          {totalCount > pageSize && (
+            <div className="flex items-center justify-between pt-4">
+              <p className="text-sm text-muted-foreground">
+                Hiển thị {page * pageSize + 1}–{Math.min((page + 1) * pageSize, totalCount)} / {totalCount}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm">Trang {page + 1} / {Math.ceil(totalCount / pageSize)}</span>
+                <Button variant="outline" size="sm" disabled={(page + 1) * pageSize >= totalCount} onClick={() => setPage(page + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -628,9 +648,9 @@ export default function SalesPage() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><span className="text-muted-foreground">Khách hàng:</span> {saleDetail.customer_name || '-'}</div>
                 <div><span className="text-muted-foreground">Ghi chú:</span> {saleDetail.note || '-'}</div>
-                <div><span className="text-muted-foreground">Doanh thu:</span> <span className="font-medium">{Number(saleDetail.total_revenue).toLocaleString('vi-VN')} VND</span></div>
-                <div><span className="text-muted-foreground">Giá vốn:</span> {Number(saleDetail.total_cost_estimated).toLocaleString('vi-VN')} VND</div>
-                <div><span className="text-muted-foreground">Lợi nhuận:</span> <span className={Number(saleDetail.profit) >= 0 ? 'font-medium text-green-600' : 'font-medium text-destructive'}>{Number(saleDetail.profit).toLocaleString('vi-VN')} VND</span></div>
+                {/* <div><span className="text-muted-foreground">Doanh thu:</span> <span className="font-medium">{Number(saleDetail.total_revenue).toLocaleString('vi-VN')} VND</span></div> */}
+                {/* <div><span className="text-muted-foreground">Giá vốn:</span> {Number(saleDetail.total_cost_estimated).toLocaleString('vi-VN')} VND</div> */}
+                {/* <div><span className="text-muted-foreground">Lợi nhuận:</span> <span className={Number(saleDetail.profit) >= 0 ? 'font-medium text-green-600' : 'font-medium text-destructive'}>{Number(saleDetail.profit).toLocaleString('vi-VN')} VND</span></div> */}
                 <div><span className="text-muted-foreground">Đã TT:</span> {Number(saleDetail.amount_paid).toLocaleString('vi-VN')} VND</div>
               </div>
               <Table>
@@ -640,7 +660,7 @@ export default function SalesPage() {
                     <TableHead>Mã lô</TableHead>
                     <TableHead className="text-right">SL</TableHead>
                     <TableHead className="text-right">Giá bán</TableHead>
-                    <TableHead className="text-right">Giá vốn</TableHead>
+                    {/* <TableHead className="text-right">Giá vốn</TableHead> */}
                     <TableHead className="text-right">Thành tiền</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -651,7 +671,7 @@ export default function SalesPage() {
                       <TableCell className="font-mono text-xs">{item.inventory_batches?.batch_code || '-'}</TableCell>
                       <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
                       <TableCell className="text-right">{Number(item.sale_price).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell>
+                      {/* <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell> */}
                       <TableCell className="text-right font-medium">{Number(item.total_price).toLocaleString('vi-VN')}</TableCell>
                     </TableRow>
                   ))}

@@ -12,12 +12,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Pencil, Trash2, Search, Truck, CreditCard } from 'lucide-react'
+import { Plus, Trash2, Search, Truck, CreditCard } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
 
 interface Supplier { id: string; name: string; phone: string | null; address: string | null; note: string | null; created_at: string }
 interface UnpaidStockIn { id: string; created_at: string; total_amount: number; amount_paid: number; supplier_name: string | null }
+interface StockInDetailItem { quantity: number; cost_price: number; total_price: number; products: { name: string; unit: string } | null; batch_code: string | null }
+interface StockInDetail { id: string; created_at: string; total_amount: number; amount_paid: number; payment_status: string; note: string | null; stock_in_items: StockInDetailItem[] }
 const emptyForm = { name: '', phone: '', address: '', note: '' }
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Tiền mặt' },
@@ -50,7 +53,12 @@ export default function SuppliersPage() {
   const [paySaving, setPaySaving] = useState(false)
   const [payMode, setPayMode] = useState<'pay' | 'debt'>('pay')
   const [debtRemaining, setDebtRemaining] = useState(0)
+  // Stock-in detail popup
+  const [siDetailOpen, setSiDetailOpen] = useState(false)
+  const [siDetail, setSiDetail] = useState<StockInDetail | null>(null)
+  const [siDetailLoading, setSiDetailLoading] = useState(false)
   const supabase = createClient()
+  const router = useRouter()
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -78,7 +86,6 @@ export default function SuppliersPage() {
   useEffect(() => { load(); loadDebts() }, [load, loadDebts])
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setDialogOpen(true) }
-  const openEdit = (s: Supplier) => { setEditing(s); setForm({ name: s.name, phone: s.phone || '', address: s.address || '', note: s.note || '' }); setDialogOpen(true) }
   const openDelete = (s: Supplier) => { setDeleting(s); setDeleteOpen(true) }
 
   const handleSave = async () => {
@@ -151,6 +158,18 @@ export default function SuppliersPage() {
 
   const totalUnpaidDebt = unpaidStockIns.reduce((s, si) => s + (si.total_amount - si.amount_paid), 0)
 
+  const openSiDetail = async (siId: string) => {
+    setSiDetailOpen(true)
+    setSiDetailLoading(true)
+    const { data } = await supabase
+      .from('stock_in')
+      .select('id, created_at, total_amount, amount_paid, payment_status, note, stock_in_items(quantity, cost_price, total_price, batch_code, products(name, unit))')
+      .eq('id', siId)
+      .single()
+    setSiDetail(data as unknown as StockInDetail)
+    setSiDetailLoading(false)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -183,7 +202,7 @@ export default function SuppliersPage() {
                 {items.map((s) => {
                   const debt = debtMap[s.id] || 0
                   return (
-                    <TableRow key={s.id}>
+                    <TableRow key={s.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/suppliers/${s.id}`)}>
                       <TableCell className="font-medium">{s.name}</TableCell>
                       <TableCell>{s.phone || '-'}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{s.address || '-'}</TableCell>
@@ -193,12 +212,11 @@ export default function SuppliersPage() {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           {debt > 0 && (
-                            <Button variant="outline" size="sm" onClick={() => openPayment(s)}>
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openPayment(s) }}>
                               <CreditCard className="mr-1 h-3 w-3" /> Chi tiền
                             </Button>
                           )}
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(s)}><Pencil className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => openDelete(s)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openDelete(s) }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -236,7 +254,7 @@ export default function SuppliersPage() {
                     </TableHeader>
                     <TableBody>
                       {unpaidStockIns.map((si) => (
-                        <TableRow key={si.id}>
+                        <TableRow key={si.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openSiDetail(si.id)}>
                           <TableCell className="text-sm">{new Date(si.created_at).toLocaleDateString('vi-VN')}</TableCell>
                           <TableCell className="text-right">{Number(si.total_amount).toLocaleString('vi-VN')}</TableCell>
                           <TableCell className="text-right">{Number(si.amount_paid).toLocaleString('vi-VN')}</TableCell>
@@ -322,6 +340,58 @@ export default function SuppliersPage() {
             <Button onClick={handleBulkPayment} disabled={paySaving || payAmount <= 0}>
               {paySaving ? 'Đang xử lý...' : 'Xác nhận chi tiền'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock-In Detail Popup */}
+      <Dialog open={siDetailOpen} onOpenChange={setSiDetailOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Chi tiết phiếu nhập</DialogTitle>
+            {siDetail && (
+              <DialogDescription>
+                Ngày: {new Date(siDetail.created_at).toLocaleString('vi-VN')} — Tổng: {Number(siDetail.total_amount).toLocaleString('vi-VN')} VND
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {siDetailLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Đang tải...</div>
+          ) : siDetail ? (
+            <div className="space-y-3">
+              <div className="flex gap-4 text-sm">
+                <div><span className="text-muted-foreground">Đã TT:</span> {Number(siDetail.amount_paid).toLocaleString('vi-VN')}</div>
+                <div><span className="text-muted-foreground">Còn nợ:</span> <span className="font-medium text-red-600">{Number(siDetail.total_amount - siDetail.amount_paid).toLocaleString('vi-VN')}</span></div>
+                {siDetail.note && <div><span className="text-muted-foreground">Ghi chú:</span> {siDetail.note}</div>}
+              </div>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Sản phẩm</TableHead>
+                      <TableHead>Mã lô</TableHead>
+                      <TableHead className="text-right">SL</TableHead>
+                      <TableHead className="text-right">Giá nhập</TableHead>
+                      <TableHead className="text-right">Thành tiền</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {siDetail.stock_in_items.map((item, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{item.products?.name || '-'} <span className="text-xs text-muted-foreground">({item.products?.unit})</span></TableCell>
+                        <TableCell className="font-mono text-xs">{item.batch_code || '-'}</TableCell>
+                        <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
+                        <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell>
+                        <TableCell className="text-right font-medium">{Number(item.total_price).toLocaleString('vi-VN')}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSiDetailOpen(false)}>Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

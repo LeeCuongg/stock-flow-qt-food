@@ -12,12 +12,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Pencil, Trash2, Search, UserCheck, CreditCard } from 'lucide-react'
+import { Plus, Trash2, Search, UserCheck, CreditCard } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
 
 interface Customer { id: string; name: string; phone: string | null; address: string | null; note: string | null; created_at: string }
 interface UnpaidSale { id: string; created_at: string; total_revenue: number; amount_paid: number; customer_name: string | null }
+interface SaleDetailItem { quantity: number; sale_price: number; cost_price: number; total_price: number; products: { name: string; unit: string } | null; inventory_batches: { batch_code: string | null } | null }
+interface SaleDetail { id: string; created_at: string; total_revenue: number; amount_paid: number; payment_status: string; note: string | null; sales_items: SaleDetailItem[] }
 const emptyForm = { name: '', phone: '', address: '', note: '' }
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Tiền mặt' },
@@ -50,7 +53,12 @@ export default function CustomersPage() {
   const [paySaving, setPaySaving] = useState(false)
   const [payMode, setPayMode] = useState<'pay' | 'debt'>('pay')
   const [debtRemaining, setDebtRemaining] = useState(0)
+  // Sale detail popup
+  const [saleDetailOpen, setSaleDetailOpen] = useState(false)
+  const [saleDetail, setSaleDetail] = useState<SaleDetail | null>(null)
+  const [saleDetailLoading, setSaleDetailLoading] = useState(false)
   const supabase = createClient()
+  const router = useRouter()
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -78,7 +86,6 @@ export default function CustomersPage() {
   useEffect(() => { load(); loadDebts() }, [load, loadDebts])
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setDialogOpen(true) }
-  const openEdit = (c: Customer) => { setEditing(c); setForm({ name: c.name, phone: c.phone || '', address: c.address || '', note: c.note || '' }); setDialogOpen(true) }
   const openDelete = (c: Customer) => { setDeleting(c); setDeleteOpen(true) }
 
   const handleSave = async () => {
@@ -151,6 +158,18 @@ export default function CustomersPage() {
 
   const totalUnpaidDebt = unpaidSales.reduce((s, sale) => s + (sale.total_revenue - sale.amount_paid), 0)
 
+  const openSaleDetail = async (saleId: string) => {
+    setSaleDetailOpen(true)
+    setSaleDetailLoading(true)
+    const { data } = await supabase
+      .from('sales')
+      .select('id, created_at, total_revenue, amount_paid, payment_status, note, sales_items(quantity, sale_price, cost_price, total_price, products(name, unit), inventory_batches(batch_code))')
+      .eq('id', saleId)
+      .single()
+    setSaleDetail(data as unknown as SaleDetail)
+    setSaleDetailLoading(false)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -183,7 +202,7 @@ export default function CustomersPage() {
                 {items.map((c) => {
                   const debt = debtMap[c.id] || 0
                   return (
-                    <TableRow key={c.id}>
+                    <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/customers/${c.id}`)}>
                       <TableCell className="font-medium">{c.name}</TableCell>
                       <TableCell>{c.phone || '-'}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{c.address || '-'}</TableCell>
@@ -193,12 +212,11 @@ export default function CustomersPage() {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           {debt > 0 && (
-                            <Button variant="outline" size="sm" onClick={() => openPayment(c)}>
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openPayment(c) }}>
                               <CreditCard className="mr-1 h-3 w-3" /> Thu tiền
                             </Button>
                           )}
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(c)}><Pencil className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => openDelete(c)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openDelete(c) }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -237,7 +255,7 @@ export default function CustomersPage() {
                     </TableHeader>
                     <TableBody>
                       {unpaidSales.map((s) => (
-                        <TableRow key={s.id}>
+                        <TableRow key={s.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openSaleDetail(s.id)}>
                           <TableCell className="text-sm">{new Date(s.created_at).toLocaleDateString('vi-VN')}</TableCell>
                           <TableCell className="text-right">{Number(s.total_revenue).toLocaleString('vi-VN')}</TableCell>
                           <TableCell className="text-right">{Number(s.amount_paid).toLocaleString('vi-VN')}</TableCell>
@@ -323,6 +341,61 @@ export default function CustomersPage() {
             <Button onClick={handleBulkPayment} disabled={paySaving || payAmount <= 0}>
               {paySaving ? 'Đang xử lý...' : 'Xác nhận thu tiền'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sale Detail Popup */}
+      <Dialog open={saleDetailOpen} onOpenChange={setSaleDetailOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Chi tiết phiếu xuất</DialogTitle>
+            {saleDetail && (
+              <DialogDescription>
+                Ngày: {new Date(saleDetail.created_at).toLocaleString('vi-VN')} — Tổng: {Number(saleDetail.total_revenue).toLocaleString('vi-VN')} VND
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {saleDetailLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Đang tải...</div>
+          ) : saleDetail ? (
+            <div className="space-y-3">
+              <div className="flex gap-4 text-sm">
+                <div><span className="text-muted-foreground">Đã TT:</span> {Number(saleDetail.amount_paid).toLocaleString('vi-VN')}</div>
+                <div><span className="text-muted-foreground">Còn nợ:</span> <span className="font-medium text-orange-600">{Number(saleDetail.total_revenue - saleDetail.amount_paid).toLocaleString('vi-VN')}</span></div>
+                {saleDetail.note && <div><span className="text-muted-foreground">Ghi chú:</span> {saleDetail.note}</div>}
+              </div>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Sản phẩm</TableHead>
+                      <TableHead>Mã lô</TableHead>
+                      <TableHead className="text-right">SL</TableHead>
+                      <TableHead className="text-right">Giá vốn</TableHead>
+                      <TableHead className="text-right">Giá bán</TableHead>
+                      <TableHead className="text-right">Thành tiền</TableHead>
+                      
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {saleDetail.sales_items.map((item, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{item.products?.name || '-'} <span className="text-xs text-muted-foreground">({item.products?.unit})</span></TableCell>
+                        <TableCell className="font-mono text-xs">{item.inventory_batches?.batch_code || '-'}</TableCell>
+                        <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
+                        <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell>
+                        <TableCell className="text-right">{Number(item.sale_price).toLocaleString('vi-VN')}</TableCell>
+                        <TableCell className="text-right font-medium">{Number(item.total_price).toLocaleString('vi-VN')}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaleDetailOpen(false)}>Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

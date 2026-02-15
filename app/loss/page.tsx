@@ -75,6 +75,8 @@ export default function LossPage() {
   const [reason, setReason] = useState('')
   const [note, setNote] = useState('')
   const [productSearch, setProductSearch] = useState('')
+  const [inputMode, setInputMode] = useState<'loss' | 'remaining'>('loss') // 'loss' = nhập SL hao hụt, 'remaining' = nhập SL thực tế còn
+  const [remainingQty, setRemainingQty] = useState(0) // SL thực tế còn trong kho
 
   // Detail modal
   const [detailOpen, setDetailOpen] = useState(false)
@@ -123,7 +125,12 @@ export default function LossPage() {
     batches.filter((b) => b.product_id === productId && b.quantity_remaining > 0)
 
   const selectedBatch = batches.find((b) => b.id === selectedBatchId)
-  const lossCost = selectedBatch ? quantity * selectedBatch.cost_price : 0
+
+  // Tính số lượng hao hụt thực tế dựa trên mode
+  const effectiveLossQty = inputMode === 'remaining' && selectedBatch
+    ? selectedBatch.quantity_remaining - remainingQty
+    : quantity
+  const lossCost = selectedBatch ? effectiveLossQty * selectedBatch.cost_price : 0
 
   // Filter records
   const filteredRecords = records.filter((r) => {
@@ -143,6 +150,8 @@ export default function LossPage() {
     setReason('')
     setNote('')
     setProductSearch('')
+    setInputMode('loss')
+    setRemainingQty(0)
     setDialogOpen(true)
     loadBatches()
   }
@@ -156,12 +165,23 @@ export default function LossPage() {
       toast.error('Vui lòng chọn lý do')
       return
     }
-    if (quantity <= 0) {
-      toast.error('Số lượng phải > 0')
+
+    const lossQty = inputMode === 'remaining' && selectedBatch
+      ? selectedBatch.quantity_remaining - remainingQty
+      : quantity
+
+    if (lossQty <= 0) {
+      toast.error(inputMode === 'remaining'
+        ? 'Số lượng thực tế phải nhỏ hơn tồn kho hệ thống'
+        : 'Số lượng phải > 0')
       return
     }
-    if (selectedBatch && quantity > selectedBatch.quantity_remaining) {
+    if (selectedBatch && lossQty > selectedBatch.quantity_remaining) {
       toast.error(`Số lượng vượt tồn kho. Tồn: ${selectedBatch.quantity_remaining}`)
+      return
+    }
+    if (inputMode === 'remaining' && remainingQty < 0) {
+      toast.error('Số lượng thực tế không thể âm')
       return
     }
 
@@ -178,7 +198,7 @@ export default function LossPage() {
         p_warehouse_id: warehouseId,
         p_product_id: selectedProductId,
         p_batch_id: selectedBatchId,
-        p_quantity: quantity,
+        p_quantity: lossQty,
         p_reason: reason,
         p_note: note.trim() || null,
       })
@@ -263,7 +283,7 @@ export default function LossPage() {
                   <TableHead className="text-right">SL</TableHead>
                   <TableHead>Lý do</TableHead>
                   <TableHead className="text-right">Giá vốn</TableHead>
-                  <TableHead className="text-right">Tổng thiệt hại</TableHead>
+                  <TableHead className="text-right">Tiền hao hụt</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -312,7 +332,7 @@ export default function LossPage() {
                 <div><span className="text-muted-foreground">Số lượng:</span><br/><span className="font-medium">{Number(detailRecord.quantity).toLocaleString('vi-VN')}</span></div>
                 <div><span className="text-muted-foreground">Lý do:</span><br/><Badge variant={reasonBadgeVariant(detailRecord.reason)}>{reasonLabel(detailRecord.reason)}</Badge></div>
                 <div><span className="text-muted-foreground">Giá vốn:</span><br/>{Number(detailRecord.cost_price).toLocaleString('vi-VN')} VND</div>
-                <div><span className="text-muted-foreground">Tổng thiệt hại:</span><br/><span className="font-medium text-destructive">{Number(detailRecord.total_loss_cost).toLocaleString('vi-VN')} VND</span></div>
+                <div><span className="text-muted-foreground">Tiền hao hụt:</span><br/><span className="font-medium text-destructive">{Number(detailRecord.total_loss_cost).toLocaleString('vi-VN')} VND</span></div>
               </div>
               {detailRecord.note && (
                 <div><span className="text-muted-foreground">Ghi chú:</span><br/>{detailRecord.note}</div>
@@ -402,13 +422,44 @@ export default function LossPage() {
               </div>
             )}
 
+            {/* Chế độ nhập */}
+            {selectedBatch && (
+              <div className="grid gap-2">
+                <Label>Cách nhập</Label>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" variant={inputMode === 'loss' ? 'default' : 'outline'}
+                    onClick={() => { setInputMode('loss'); setQuantity(1) }}>
+                    Nhập số lượng hao hụt
+                  </Button>
+                  <Button type="button" size="sm" variant={inputMode === 'remaining' ? 'default' : 'outline'}
+                    onClick={() => { setInputMode('remaining'); setRemainingQty(selectedBatch.quantity_remaining) }}>
+                    Nhập SL thực tế còn
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Quantity + Reason */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Số lượng *{selectedBatch ? ` (tối đa ${selectedBatch.quantity_remaining})` : ''}</Label>
-                <Input type="number" min={1} max={selectedBatch?.quantity_remaining || undefined}
-                  value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
-              </div>
+              {inputMode === 'loss' ? (
+                <div className="grid gap-2">
+                  <Label>Số lượng hao hụt *{selectedBatch ? ` (tối đa ${selectedBatch.quantity_remaining})` : ''}</Label>
+                  <Input type="number" min={1} max={selectedBatch?.quantity_remaining || undefined}
+                    value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <Label>SL thực tế còn trong kho *</Label>
+                  <Input type="number" min={0} max={selectedBatch?.quantity_remaining || undefined}
+                    value={remainingQty} onChange={(e) => setRemainingQty(Number(e.target.value))} />
+                  {selectedBatch && remainingQty >= 0 && remainingQty < selectedBatch.quantity_remaining && (
+                    <p className="text-sm text-muted-foreground">
+                      → Hao hụt: <span className="font-medium text-destructive">{(selectedBatch.quantity_remaining - remainingQty).toLocaleString('vi-VN')}</span>
+                      {' '}(Tồn hệ thống: {Number(selectedBatch.quantity_remaining).toLocaleString('vi-VN')} − Thực tế: {remainingQty.toLocaleString('vi-VN')})
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="grid gap-2">
                 <Label>Lý do *</Label>
                 <Select value={reason} onValueChange={setReason}>
@@ -431,10 +482,10 @@ export default function LossPage() {
             </div>
 
             {/* Loss cost preview */}
-            {selectedBatch && quantity > 0 && (
+            {selectedBatch && effectiveLossQty > 0 && (
               <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
                 <div className="flex justify-between text-sm font-medium">
-                  <span>Tổng thiệt hại:</span>
+                  <span>Tiền hao hụt:</span>
                   <span className="text-destructive text-lg">{lossCost.toLocaleString('vi-VN')} VND</span>
                 </div>
               </div>

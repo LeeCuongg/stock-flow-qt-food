@@ -17,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, PackagePlus, CreditCard, Eye, Pencil, Search, X } from 'lucide-react'
+import { Plus, Trash2, PackagePlus, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
@@ -168,6 +168,9 @@ export default function StockInPage() {
   const [filterDatePreset, setFilterDatePreset] = useState('all')
   const [filterSupplierId, setFilterSupplierId] = useState('')
   const [filterPaymentStatus, setFilterPaymentStatus] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+  const pageSize = 50
   const supabase = createClient()
   const router = useRouter()
 
@@ -175,18 +178,21 @@ export default function StockInPage() {
     setIsLoading(true)
     let query = supabase
       .from('stock_in')
-      .select('*')
+      .select('*', { count: 'exact' })
       .neq('status', 'CANCELLED')
     if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00')
     if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59')
     if (filterSupplierId) query = query.eq('supplier_id', filterSupplierId)
     if (filterPaymentStatus) query = query.eq('payment_status', filterPaymentStatus)
-    query = query.order('created_at', { ascending: false })
-    const { data, error } = await query
+    query = query.order('created_at', { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1)
+    const { data, error, count } = await query
     if (error) toast.error('Lỗi tải phiếu nhập')
-    else setRecords(data || [])
+    else {
+      setRecords(data || [])
+      setTotalCount(count || 0)
+    }
     setIsLoading(false)
-  }, [filterDateFrom, filterDateTo, filterSupplierId, filterPaymentStatus])
+  }, [filterDateFrom, filterDateTo, filterSupplierId, filterPaymentStatus, page])
 
   const loadProducts = useCallback(async () => {
     const { data } = await supabase
@@ -493,11 +499,11 @@ export default function StockInPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button variant="outline" size="sm" className="h-9" onClick={() => loadRecords()}>
+            <Button variant="outline" size="sm" className="h-9" onClick={() => { setPage(0); loadRecords() }}>
               <Search className="mr-1 h-3 w-3" /> Lọc
             </Button>
             {(filterDatePreset !== 'all' || filterSupplierId || filterPaymentStatus) && (
-              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterSupplierId(''); setFilterPaymentStatus('') }}>
+              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterSupplierId(''); setFilterPaymentStatus(''); setPage(0) }}>
                 <X className="mr-1 h-3 w-3" /> Xoá lọc
               </Button>
             )}
@@ -548,9 +554,6 @@ export default function StockInPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}`) }}>
-                          <Eye className="mr-1 h-3 w-3" /> Xem
-                        </Button>
                         {Number(r.amount_paid) === 0 && (
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}/edit`) }}>
                             <Pencil className="mr-1 h-3 w-3" /> Sửa
@@ -572,6 +575,23 @@ export default function StockInPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          {/* Pagination */}
+          {totalCount > pageSize && (
+            <div className="flex items-center justify-between pt-4">
+              <p className="text-sm text-muted-foreground">
+                Hiển thị {page * pageSize + 1}–{Math.min((page + 1) * pageSize, totalCount)} / {totalCount}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm">Trang {page + 1} / {Math.ceil(totalCount / pageSize)}</span>
+                <Button variant="outline" size="sm" disabled={(page + 1) * pageSize >= totalCount} onClick={() => setPage(page + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
