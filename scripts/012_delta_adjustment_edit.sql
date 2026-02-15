@@ -103,6 +103,7 @@ BEGIN
   SELECT * INTO v_si FROM public.stock_in WHERE id = p_stock_in_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Stock-in % not found', p_stock_in_id; END IF;
   IF v_si.status = 'CANCELLED' THEN RAISE EXCEPTION 'Cannot edit a cancelled stock-in'; END IF;
+  IF v_si.amount_paid > 0 THEN RAISE EXCEPTION 'Cannot edit stock-in with existing payments (amount_paid = %)', v_si.amount_paid; END IF;
 
   -- 2. Snapshot old items
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -259,6 +260,7 @@ BEGIN
   SELECT * INTO v_sale FROM public.sales WHERE id = p_sale_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Sale % not found', p_sale_id; END IF;
   IF v_sale.status = 'CANCELLED' THEN RAISE EXCEPTION 'Cannot edit a cancelled sale'; END IF;
+  IF v_sale.amount_paid > 0 THEN RAISE EXCEPTION 'Cannot edit sale with existing payments (amount_paid = %)', v_sale.amount_paid; END IF;
 
   -- 2. Snapshot old items
   SELECT COALESCE(jsonb_agg(jsonb_build_object(

@@ -17,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, PackagePlus, CreditCard, Eye, Pencil } from 'lucide-react'
+import { Plus, Trash2, PackagePlus, CreditCard, Eye, Pencil, Search, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
@@ -31,6 +31,57 @@ const PAYMENT_METHODS = [
   { value: 'ZALOPAY', label: 'ZaloPay' },
   { value: 'OTHER', label: 'Khác' },
 ]
+
+const DATE_PRESETS = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'today', label: 'Hôm nay' },
+  { value: '7days', label: '7 ngày' },
+  { value: '30days', label: '30 ngày' },
+  { value: '90days', label: '90 ngày' },
+  { value: 'last_month', label: 'Tháng trước' },
+  { value: '3months_ago', label: '3 tháng trước' },
+  { value: 'last_year', label: 'Năm trước' },
+  { value: 'custom', label: 'Tuỳ chọn' },
+]
+
+function getDateRange(preset: string): { from: string; to: string } {
+  const today = new Date()
+  const fmt = (d: Date) => d.toISOString().split('T')[0]
+  const todayStr = fmt(today)
+  switch (preset) {
+    case 'today':
+      return { from: todayStr, to: todayStr }
+    case '7days': {
+      const d = new Date(today); d.setDate(d.getDate() - 6)
+      return { from: fmt(d), to: todayStr }
+    }
+    case '30days': {
+      const d = new Date(today); d.setDate(d.getDate() - 29)
+      return { from: fmt(d), to: todayStr }
+    }
+    case '90days': {
+      const d = new Date(today); d.setDate(d.getDate() - 89)
+      return { from: fmt(d), to: todayStr }
+    }
+    case 'last_month': {
+      const first = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+      const last = new Date(today.getFullYear(), today.getMonth(), 0)
+      return { from: fmt(first), to: fmt(last) }
+    }
+    case '3months_ago': {
+      const first = new Date(today.getFullYear(), today.getMonth() - 3, 1)
+      const last = new Date(today.getFullYear(), today.getMonth(), 0)
+      return { from: fmt(first), to: fmt(last) }
+    }
+    case 'last_year': {
+      const first = new Date(today.getFullYear() - 1, 0, 1)
+      const last = new Date(today.getFullYear() - 1, 11, 31)
+      return { from: fmt(first), to: fmt(last) }
+    }
+    default:
+      return { from: '', to: '' }
+  }
+}
 
 interface Product {
   id: string
@@ -92,6 +143,7 @@ export default function StockInPage() {
   const [selectedSupplierId, setSelectedSupplierId] = useState('')
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [note, setNote] = useState('')
+  const [createdDate, setCreatedDate] = useState(new Date().toISOString().split('T')[0])
   const [items, setItems] = useState<StockInItem[]>([])
   const [productSearch, setProductSearch] = useState('')
   // Payment modal
@@ -110,20 +162,31 @@ export default function StockInPage() {
   const [cancellingRecord, setCancellingRecord] = useState<StockInRecord | null>(null)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelSaving, setCancelSaving] = useState(false)
+  // Filters
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
+  const [filterDatePreset, setFilterDatePreset] = useState('all')
+  const [filterSupplierId, setFilterSupplierId] = useState('')
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState('')
   const supabase = createClient()
   const router = useRouter()
 
   const loadRecords = useCallback(async () => {
     setIsLoading(true)
-    const { data, error } = await supabase
+    let query = supabase
       .from('stock_in')
       .select('*')
       .neq('status', 'CANCELLED')
-      .order('created_at', { ascending: false })
+    if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00')
+    if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59')
+    if (filterSupplierId) query = query.eq('supplier_id', filterSupplierId)
+    if (filterPaymentStatus) query = query.eq('payment_status', filterPaymentStatus)
+    query = query.order('created_at', { ascending: false })
+    const { data, error } = await query
     if (error) toast.error('Lỗi tải phiếu nhập')
     else setRecords(data || [])
     setIsLoading(false)
-  }, [])
+  }, [filterDateFrom, filterDateTo, filterSupplierId, filterPaymentStatus])
 
   const loadProducts = useCallback(async () => {
     const { data } = await supabase
@@ -174,6 +237,7 @@ export default function StockInPage() {
     setSupplierAddress('')
     setSelectedSupplierId('')
     setNote('')
+    setCreatedDate(new Date().toISOString().split('T')[0])
     setItems([])
     setProductSearch('')
     setDialogOpen(true)
@@ -343,6 +407,7 @@ export default function StockInPage() {
         p_note: note.trim() || null,
         p_items: rpcItems,
         p_supplier_id: supplierId,
+        p_created_at: createdDate ? new Date(createdDate + 'T00:00:00').toISOString() : null,
       })
 
       if (error) throw error
@@ -369,6 +434,76 @@ export default function StockInPage() {
           <Plus className="mr-2 h-4 w-4" /> Tạo phiếu nhập
         </Button>
       </div>
+
+      {/* Filter Bar */}
+      <Card>
+        <CardContent className="pt-4 pb-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Thời gian</Label>
+              <Select value={filterDatePreset} onValueChange={(val) => {
+                setFilterDatePreset(val)
+                if (val !== 'custom') {
+                  const range = getDateRange(val)
+                  setFilterDateFrom(range.from)
+                  setFilterDateTo(range.to)
+                }
+              }}>
+                <SelectTrigger className="w-[140px] h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DATE_PRESETS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {filterDatePreset === 'custom' && (
+              <>
+                <div className="grid gap-1">
+                  <Label className="text-xs text-muted-foreground">Từ ngày</Label>
+                  <Input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="w-[150px] h-9" />
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-xs text-muted-foreground">Đến ngày</Label>
+                  <Input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="w-[150px] h-9" />
+                </div>
+              </>
+            )}
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Nhà cung cấp</Label>
+              <Select value={filterSupplierId} onValueChange={(val) => setFilterSupplierId(val === 'all' ? '' : val)}>
+                <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả</SelectItem>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Trạng thái TT</Label>
+              <Select value={filterPaymentStatus} onValueChange={(val) => setFilterPaymentStatus(val === 'all' ? '' : val)}>
+                <SelectTrigger className="w-[150px] h-9"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả</SelectItem>
+                  <SelectItem value="PAID">Đã TT</SelectItem>
+                  <SelectItem value="PARTIAL">TT một phần</SelectItem>
+                  <SelectItem value="UNPAID">Chưa TT</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="outline" size="sm" className="h-9" onClick={() => loadRecords()}>
+              <Search className="mr-1 h-3 w-3" /> Lọc
+            </Button>
+            {(filterDatePreset !== 'all' || filterSupplierId || filterPaymentStatus) && (
+              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterSupplierId(''); setFilterPaymentStatus('') }}>
+                <X className="mr-1 h-3 w-3" /> Xoá lọc
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -416,12 +551,16 @@ export default function StockInPage() {
                         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}`) }}>
                           <Eye className="mr-1 h-3 w-3" /> Xem
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}/edit`) }}>
-                          <Pencil className="mr-1 h-3 w-3" /> Sửa
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); openCancelDialog(r) }}>
-                          <Trash2 className="mr-1 h-3 w-3" /> Huỷ
-                        </Button>
+                        {Number(r.amount_paid) === 0 && (
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}/edit`) }}>
+                            <Pencil className="mr-1 h-3 w-3" /> Sửa
+                          </Button>
+                        )}
+                        {Number(r.amount_paid) === 0 && (
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); openCancelDialog(r) }}>
+                            <Trash2 className="mr-1 h-3 w-3" /> Huỷ
+                          </Button>
+                        )}
                         {r.payment_status !== 'PAID' && (
                           <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openStockInPayment(r) }}>
                             <CreditCard className="mr-1 h-3 w-3" /> Chi tiền
@@ -543,6 +682,11 @@ export default function StockInPage() {
                 <Label htmlFor="note">Ghi chú</Label>
                 <Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ghi chú phiếu nhập" rows={1} />
               </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="created-date">Ngày tạo phiếu</Label>
+              <Input id="created-date" type="date" value={createdDate} onChange={(e) => setCreatedDate(e.target.value)} />
             </div>
 
             {/* Product search & add */}

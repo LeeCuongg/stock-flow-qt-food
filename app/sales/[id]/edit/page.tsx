@@ -63,7 +63,7 @@ export default function SaleEditPage() {
     const [saleRes, custRes, prodRes, batchRes] = await Promise.all([
       supabase
         .from('sales')
-        .select('id, customer_id, note, status, sales_items(product_id, batch_id, quantity, sale_price, cost_price, products(name, unit), inventory_batches(id, batch_code, quantity_remaining, cost_price, expiry_date))')
+        .select('id, customer_id, note, status, amount_paid, sales_items(product_id, batch_id, quantity, sale_price, cost_price, products(name, unit), inventory_batches(id, batch_code, quantity_remaining, cost_price, expiry_date))')
         .eq('id', id)
         .single(),
       supabase.from('customers').select('id, name').order('name'),
@@ -73,7 +73,7 @@ export default function SaleEditPage() {
 
     if (saleRes.error) { toast.error('Không tìm thấy đơn xuất'); router.push('/sales'); return }
     const sale = saleRes.data as unknown as {
-      id: string; customer_id: string | null; note: string | null; status: string
+      id: string; customer_id: string | null; note: string | null; status: string; amount_paid: number
       sales_items: {
         product_id: string; batch_id: string; quantity: number; sale_price: number; cost_price: number
         products: { name: string; unit: string } | null
@@ -82,6 +82,7 @@ export default function SaleEditPage() {
     }
 
     if (sale.status === 'CANCELLED') { toast.error('Đơn đã hủy, không thể chỉnh sửa'); router.push(`/sales/${id}`); return }
+    if (Number(sale.amount_paid) > 0) { toast.error('Đơn đã có thanh toán, không thể chỉnh sửa'); router.push(`/sales/${id}`); return }
 
     setOriginalStatus(sale.status)
     setSelectedCustomerId(sale.customer_id || '')

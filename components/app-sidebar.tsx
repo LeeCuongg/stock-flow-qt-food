@@ -47,16 +47,6 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
-    title: 'Danh mục',
-    url: '/categories',
-    icon: Tags,
-  },
-  {
-    title: 'Sản phẩm',
-    url: '/products',
-    icon: Package,
-  },
-  {
     title: 'Nhập kho',
     url: '/stock-in',
     icon: PackagePlus,
@@ -90,6 +80,16 @@ const navItems = [
     title: 'Thanh toán',
     url: '/payments',
     icon: CreditCard,
+  },
+  {
+    title: 'Danh mục',
+    url: '/categories',
+    icon: Tags,
+  },
+  {
+    title: 'Sản phẩm',
+    url: '/products',
+    icon: Package,
   },
 ]
 

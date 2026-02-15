@@ -18,6 +18,10 @@ import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, Package, ShoppingCart,
   ArrowDownCircle, ArrowUpCircle, HandCoins, Banknote,
 } from 'lucide-react'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 
 interface Summary {
@@ -39,6 +43,59 @@ function formatDate(d: Date): string {
   return d.toISOString().split('T')[0]
 }
 
+const DATE_PRESETS = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'today', label: 'Hôm nay' },
+  { value: '7days', label: '7 ngày' },
+  { value: '30days', label: '30 ngày' },
+  { value: '90days', label: '90 ngày' },
+  { value: 'last_month', label: 'Tháng trước' },
+  { value: '3months_ago', label: '3 tháng trước' },
+  { value: 'last_year', label: 'Năm trước' },
+  { value: 'custom', label: 'Tuỳ chọn' },
+]
+
+function getPresetDateRange(preset: string): { from: string; to: string } {
+  const today = new Date()
+  const fmt = (d: Date) => d.toISOString().split('T')[0]
+  const todayStr = fmt(today)
+  switch (preset) {
+    case 'today':
+      return { from: todayStr, to: todayStr }
+    case '7days': {
+      const d = new Date(today); d.setDate(d.getDate() - 6)
+      return { from: fmt(d), to: todayStr }
+    }
+    case '30days': {
+      const d = new Date(today); d.setDate(d.getDate() - 29)
+      return { from: fmt(d), to: todayStr }
+    }
+    case '90days': {
+      const d = new Date(today); d.setDate(d.getDate() - 89)
+      return { from: fmt(d), to: todayStr }
+    }
+    case 'last_month': {
+      const first = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+      const last = new Date(today.getFullYear(), today.getMonth(), 0)
+      return { from: fmt(first), to: fmt(last) }
+    }
+    case '3months_ago': {
+      const first = new Date(today.getFullYear(), today.getMonth() - 3, 1)
+      const last = new Date(today.getFullYear(), today.getMonth(), 0)
+      return { from: fmt(first), to: fmt(last) }
+    }
+    case 'last_year': {
+      const first = new Date(today.getFullYear() - 1, 0, 1)
+      const last = new Date(today.getFullYear() - 1, 11, 31)
+      return { from: fmt(first), to: fmt(last) }
+    }
+    case 'all':
+      return { from: '', to: '' }
+    default:
+      return { from: '', to: '' }
+  }
+}
+
 function formatVN(n: number): string {
   return Number(n).toLocaleString('vi-VN')
 }
@@ -57,7 +114,8 @@ export default function DashboardPage() {
 
   // Date range
   const today = new Date()
-  const [startDate, setStartDate] = useState(formatDate(new Date(today.getFullYear(), today.getMonth(), 1)))
+  const [datePreset, setDatePreset] = useState('30days')
+  const [startDate, setStartDate] = useState(formatDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29)))
   const [endDate, setEndDate] = useState(formatDate(today))
 
   // Data
@@ -83,18 +141,20 @@ export default function DashboardPage() {
     if (!warehouseId) return
     setLoading(true)
     setError('')
+    const qStart = startDate || '2000-01-01'
+    const qEnd = endDate || '2099-12-31'
     try {
       const [summaryRes, salesRes, lossRes, topSalesRes, topLossRes, expiringRes, receivableRes, payableRes, paymentsInRes, paymentsOutRes] = await Promise.all([
-        supabase.rpc('get_dashboard_summary', { p_warehouse_id: warehouseId, p_start_date: startDate, p_end_date: endDate }),
-        supabase.rpc('get_daily_sales_report', { p_warehouse_id: warehouseId, p_start_date: startDate, p_end_date: endDate }),
-        supabase.rpc('get_daily_loss_report', { p_warehouse_id: warehouseId, p_start_date: startDate, p_end_date: endDate }),
-        supabase.rpc('get_top_products_sales', { p_warehouse_id: warehouseId, p_start_date: startDate, p_end_date: endDate, p_limit_n: 10 }),
-        supabase.rpc('get_top_products_loss', { p_warehouse_id: warehouseId, p_start_date: startDate, p_end_date: endDate, p_limit_n: 10 }),
+        supabase.rpc('get_dashboard_summary', { p_warehouse_id: warehouseId, p_start_date: qStart, p_end_date: qEnd }),
+        supabase.rpc('get_daily_sales_report', { p_warehouse_id: warehouseId, p_start_date: qStart, p_end_date: qEnd }),
+        supabase.rpc('get_daily_loss_report', { p_warehouse_id: warehouseId, p_start_date: qStart, p_end_date: qEnd }),
+        supabase.rpc('get_top_products_sales', { p_warehouse_id: warehouseId, p_start_date: qStart, p_end_date: qEnd, p_limit_n: 10 }),
+        supabase.rpc('get_top_products_loss', { p_warehouse_id: warehouseId, p_start_date: qStart, p_end_date: qEnd, p_limit_n: 10 }),
         supabase.rpc('get_expiring_batches', { p_warehouse_id: warehouseId, p_days_threshold: 30 }),
         supabase.rpc('get_receivable_report', { p_warehouse_id: warehouseId }),
         supabase.rpc('get_payable_report', { p_warehouse_id: warehouseId }),
-        supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'IN').gte('created_at', `${startDate}T00:00:00`).lte('created_at', `${endDate}T23:59:59`),
-        supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'OUT').gte('created_at', `${startDate}T00:00:00`).lte('created_at', `${endDate}T23:59:59`),
+        supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'IN').gte('created_at', `${qStart}T00:00:00`).lte('created_at', `${qEnd}T23:59:59`),
+        supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'OUT').gte('created_at', `${qStart}T00:00:00`).lte('created_at', `${qEnd}T23:59:59`),
       ])
 
       if (summaryRes.error) throw summaryRes.error
@@ -126,14 +186,6 @@ export default function DashboardPage() {
   useEffect(() => { loadWarehouses() }, [loadWarehouses])
   useEffect(() => { if (warehouseId) loadDashboard() }, [warehouseId, loadDashboard])
 
-  const setQuickRange = (days: number) => {
-    const end = new Date()
-    const start = new Date()
-    start.setDate(end.getDate() - days + 1)
-    setStartDate(formatDate(start))
-    setEndDate(formatDate(end))
-  }
-
   const getExpiryStatus = (expiryDate: string) => {
     const diffDays = Math.ceil((new Date(expiryDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
     if (diffDays < 0) return 'expired'
@@ -153,29 +205,52 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Filter bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
         {warehouses.length > 1 && (
-          <select
-            className="border rounded-md px-3 py-2 text-sm bg-background"
-            value={warehouseId}
-            onChange={(e) => setWarehouseId(e.target.value)}
-            aria-label="Chọn kho"
-          >
-            {warehouses.map((w) => (
-              <option key={w.id} value={w.id}>{w.name}</option>
-            ))}
-          </select>
+          <div className="grid gap-1">
+            <Label className="text-xs text-muted-foreground">Kho</Label>
+            <select
+              className="border rounded-md px-3 py-2 text-sm bg-background h-9"
+              value={warehouseId}
+              onChange={(e) => setWarehouseId(e.target.value)}
+              aria-label="Chọn kho"
+            >
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          </div>
         )}
-        <div className="flex items-center gap-2">
-          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-36" aria-label="Từ ngày" />
-          <span className="text-sm text-muted-foreground">→</span>
-          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-36" aria-label="Đến ngày" />
+        <div className="grid gap-1">
+          <Label className="text-xs text-muted-foreground">Thời gian</Label>
+          <Select value={datePreset} onValueChange={(val) => {
+            setDatePreset(val)
+            if (val !== 'custom') {
+              const range = getPresetDateRange(val)
+              setStartDate(range.from)
+              setEndDate(range.to)
+            }
+          }}>
+            <SelectTrigger className="w-[140px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {DATE_PRESETS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setQuickRange(7)}>7 ngày</Button>
-          <Button variant="outline" size="sm" onClick={() => setQuickRange(30)}>30 ngày</Button>
-          <Button variant="outline" size="sm" onClick={() => setQuickRange(90)}>90 ngày</Button>
-        </div>
+        {datePreset === 'custom' && (
+          <div className="flex items-end gap-2">
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Từ ngày</Label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[150px] h-9" aria-label="Từ ngày" />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Đến ngày</Label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[150px] h-9" aria-label="Đến ngày" />
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (

@@ -30,6 +30,9 @@ BEGIN
   IF v_si.status = 'CANCELLED' THEN
     RAISE EXCEPTION 'Stock-in already cancelled';
   END IF;
+  IF v_si.amount_paid > 0 THEN
+    RAISE EXCEPTION 'Cannot cancel stock-in with existing payments (amount_paid = %)', v_si.amount_paid;
+  END IF;
 
   -- Snapshot old items
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -110,6 +113,9 @@ BEGIN
   END IF;
   IF v_sale.status = 'CANCELLED' THEN
     RAISE EXCEPTION 'Sale already cancelled';
+  END IF;
+  IF v_sale.amount_paid > 0 THEN
+    RAISE EXCEPTION 'Cannot cancel sale with existing payments (amount_paid = %)', v_sale.amount_paid;
   END IF;
 
   -- Snapshot old items

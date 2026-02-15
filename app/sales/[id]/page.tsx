@@ -97,12 +97,16 @@ export default function SaleDetailPage() {
         </div>
         {detail.status !== 'CANCELLED' && (
           <div className="flex items-center gap-2">
-            <Button variant="destructive" onClick={() => { setCancelReason(''); setCancelOpen(true) }}>
-              <Trash2 className="mr-2 h-4 w-4" /> Huỷ đơn
-            </Button>
-            <Button onClick={() => router.push(`/sales/${id}/edit`)}>
-              <Pencil className="mr-2 h-4 w-4" /> Chỉnh sửa
-            </Button>
+            {Number(detail.amount_paid) === 0 && (
+              <Button variant="destructive" onClick={() => { setCancelReason(''); setCancelOpen(true) }}>
+                <Trash2 className="mr-2 h-4 w-4" /> Huỷ đơn
+              </Button>
+            )}
+            {Number(detail.amount_paid) === 0 && (
+              <Button onClick={() => router.push(`/sales/${id}/edit`)}>
+                <Pencil className="mr-2 h-4 w-4" /> Chỉnh sửa
+              </Button>
+            )}
           </div>
         )}
       </div>

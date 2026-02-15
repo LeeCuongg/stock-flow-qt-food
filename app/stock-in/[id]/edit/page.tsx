@@ -54,7 +54,7 @@ export default function StockInEditPage() {
     const [siRes, suppRes, prodRes] = await Promise.all([
       supabase
         .from('stock_in')
-        .select('id, supplier_id, note, status, stock_in_items(product_id, batch_code, expired_date, quantity, cost_price, products(name, unit))')
+        .select('id, supplier_id, note, status, amount_paid, stock_in_items(product_id, batch_code, expired_date, quantity, cost_price, products(name, unit))')
         .eq('id', id)
         .single(),
       supabase.from('suppliers').select('id, name').order('name'),
@@ -63,11 +63,12 @@ export default function StockInEditPage() {
 
     if (siRes.error) { toast.error('Không tìm thấy phiếu nhập'); router.push('/stock-in'); return }
     const si = siRes.data as unknown as {
-      id: string; supplier_id: string | null; note: string | null; status: string
+      id: string; supplier_id: string | null; note: string | null; status: string; amount_paid: number
       stock_in_items: { product_id: string; batch_code: string; expired_date: string | null; quantity: number; cost_price: number; products: { name: string; unit: string } | null }[]
     }
 
     if (si.status === 'CANCELLED') { toast.error('Phiếu đã hủy, không thể chỉnh sửa'); router.push(`/stock-in/${id}`); return }
+    if (Number(si.amount_paid) > 0) { toast.error('Phiếu đã có thanh toán, không thể chỉnh sửa'); router.push(`/stock-in/${id}`); return }
 
     setOriginalStatus(si.status)
     setSelectedSupplierId(si.supplier_id || '')
