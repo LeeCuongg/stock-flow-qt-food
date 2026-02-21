@@ -17,10 +17,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, ShoppingCart, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, ShoppingCart, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { ViewSaleDetails } from '@/components/view-sale-details'
 
 interface Customer { id: string; name: string }
 
@@ -126,26 +127,6 @@ interface SaleRecord {
   created_at: string
 }
 
-interface SaleDetail {
-  id: string
-  customer_name: string | null
-  note: string | null
-  total_revenue: number
-  total_cost_estimated: number
-  profit: number
-  amount_paid: number
-  payment_status: string
-  created_at: string
-  sales_items: {
-    quantity: number
-    sale_price: number
-    cost_price: number
-    total_price: number
-    products: { name: string; unit: string } | null
-    inventory_batches: { batch_code: string | null; expiry_date: string | null } | null
-  }[]
-}
-
 export default function SalesPage() {
   const [records, setRecords] = useState<SaleRecord[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -172,10 +153,9 @@ export default function SalesPage() {
   const [payMethod, setPayMethod] = useState('CASH')
   const [payNote, setPayNote] = useState('')
   const [payingSaving, setPayingSaving] = useState(false)
-  // Detail modal
+  // Detail modal (invoice-style)
   const [detailOpen, setDetailOpen] = useState(false)
-  const [saleDetail, setSaleDetail] = useState<SaleDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailSaleId, setDetailSaleId] = useState<string | null>(null)
   const [customerPrices, setCustomerPrices] = useState<Record<string, number>>({})
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancellingSale, setCancellingSale] = useState<SaleRecord | null>(null)
@@ -461,18 +441,9 @@ export default function SalesPage() {
     }
   }
 
-  const openSaleDetail = async (record: SaleRecord) => {
+  const openSaleDetail = (record: SaleRecord) => {
+    setDetailSaleId(record.id)
     setDetailOpen(true)
-    setSaleDetail(null)
-    setDetailLoading(true)
-    const { data, error } = await supabase
-      .from('sales')
-      .select('id, customer_name, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, created_at, sales_items(quantity, sale_price, cost_price, total_price, products(name, unit), inventory_batches(batch_code, expiry_date))')
-      .eq('id', record.id)
-      .single()
-    if (error) toast.error('Lỗi tải chi tiết')
-    else setSaleDetail(data as unknown as SaleDetail)
-    setDetailLoading(false)
   }
 
   const openCancelDialog = (record: SaleRecord) => {
@@ -626,6 +597,9 @@ export default function SalesPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openSaleDetail(r) }}>
+                          <FileText className="mr-1 h-3 w-3" /> Phiếu
+                        </Button>
                         {Number(r.amount_paid) === 0 && (
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/sales/${r.id}/edit`) }}>
                             <Pencil className="mr-1 h-3 w-3" /> Sửa
@@ -668,55 +642,12 @@ export default function SalesPage() {
         </CardContent>
       </Card>
 
-      {/* Sale Detail Dialog */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Chi tiết đơn xuất</DialogTitle>
-            <DialogDescription>
-              {saleDetail ? new Date(saleDetail.created_at).toLocaleString('vi-VN') : ''}
-            </DialogDescription>
-          </DialogHeader>
-          {detailLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Đang tải...</div>
-          ) : saleDetail && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-muted-foreground">Khách hàng:</span> {saleDetail.customer_name || '-'}</div>
-                <div><span className="text-muted-foreground">Ghi chú:</span> {saleDetail.note || '-'}</div>
-                {/* <div><span className="text-muted-foreground">Doanh thu:</span> <span className="font-medium">{Number(saleDetail.total_revenue).toLocaleString('vi-VN')} VND</span></div> */}
-                {/* <div><span className="text-muted-foreground">Giá vốn:</span> {Number(saleDetail.total_cost_estimated).toLocaleString('vi-VN')} VND</div> */}
-                {/* <div><span className="text-muted-foreground">Lợi nhuận:</span> <span className={Number(saleDetail.profit) >= 0 ? 'font-medium text-green-600' : 'font-medium text-destructive'}>{Number(saleDetail.profit).toLocaleString('vi-VN')} VND</span></div> */}
-                <div><span className="text-muted-foreground">Đã TT:</span> {Number(saleDetail.amount_paid).toLocaleString('vi-VN')} VND</div>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Sản phẩm</TableHead>
-                    <TableHead>Mã lô</TableHead>
-                    <TableHead className="text-right">SL</TableHead>
-                    <TableHead className="text-right">Giá bán</TableHead>
-                    {/* <TableHead className="text-right">Giá vốn</TableHead> */}
-                    <TableHead className="text-right">Thành tiền</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {saleDetail.sales_items.map((item, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-medium">{item.products?.name || '-'} <span className="text-xs text-muted-foreground">({item.products?.unit})</span></TableCell>
-                      <TableCell className="font-mono text-xs">{item.inventory_batches?.batch_code || '-'}</TableCell>
-                      <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="text-right">{Number(item.sale_price).toLocaleString('vi-VN')}</TableCell>
-                      {/* <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell> */}
-                      <TableCell className="text-right font-medium">{Number(item.total_price).toLocaleString('vi-VN')}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Sale Detail Dialog (Invoice-style) */}
+      <ViewSaleDetails
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        saleId={detailSaleId}
+      />
 
       {/* Create Sale Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

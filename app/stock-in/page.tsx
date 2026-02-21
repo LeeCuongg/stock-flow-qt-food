@@ -17,10 +17,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, PackagePlus, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, PackagePlus, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { ViewStockInDetails } from '@/components/view-stock-in-details'
 
 interface Supplier { id: string; name: string }
 
@@ -113,24 +114,6 @@ interface StockInRecord {
   warehouse_id: string
 }
 
-interface StockInDetail {
-  id: string
-  supplier_name: string | null
-  note: string | null
-  total_amount: number
-  amount_paid: number
-  payment_status: string
-  created_at: string
-  stock_in_items: {
-    quantity: number
-    cost_price: number
-    total_price: number
-    batch_code: string | null
-    expired_date: string | null
-    products: { name: string; unit: string } | null
-  }[]
-}
-
 export default function StockInPage() {
   const [records, setRecords] = useState<StockInRecord[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -153,10 +136,9 @@ export default function StockInPage() {
   const [payMethod, setPayMethod] = useState('CASH')
   const [payNote, setPayNote] = useState('')
   const [payingSaving, setPayingSaving] = useState(false)
-  // Detail modal
+  // Detail modal (invoice-style)
   const [detailOpen, setDetailOpen] = useState(false)
-  const [detail, setDetail] = useState<StockInDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailStockInId, setDetailStockInId] = useState<string | null>(null)
   const [supplierPrices, setSupplierPrices] = useState<Record<string, number>>({})
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancellingRecord, setCancellingRecord] = useState<StockInRecord | null>(null)
@@ -327,18 +309,9 @@ export default function StockInPage() {
     finally { setPayingSaving(false) }
   }
 
-  const openDetail = async (record: StockInRecord) => {
+  const openDetail = (record: StockInRecord) => {
+    setDetailStockInId(record.id)
     setDetailOpen(true)
-    setDetail(null)
-    setDetailLoading(true)
-    const { data, error } = await supabase
-      .from('stock_in')
-      .select('id, supplier_name, note, total_amount, amount_paid, payment_status, created_at, stock_in_items(quantity, cost_price, total_price, batch_code, expired_date, products(name, unit))')
-      .eq('id', record.id)
-      .single()
-    if (error) toast.error('Lỗi tải chi tiết')
-    else setDetail(data as unknown as StockInDetail)
-    setDetailLoading(false)
   }
 
   const openCancelDialog = (record: StockInRecord) => {
@@ -593,6 +566,9 @@ export default function StockInPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(r) }}>
+                          <FileText className="mr-1 h-3 w-3" /> Phiếu
+                        </Button>
                         {Number(r.amount_paid) === 0 && (
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}/edit`) }}>
                             <Pencil className="mr-1 h-3 w-3" /> Sửa
@@ -635,53 +611,12 @@ export default function StockInPage() {
         </CardContent>
       </Card>
 
-      {/* Detail Dialog */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Chi tiết phiếu nhập</DialogTitle>
-            <DialogDescription>
-              {detail ? new Date(detail.created_at).toLocaleString('vi-VN') : ''}
-            </DialogDescription>
-          </DialogHeader>
-          {detailLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Đang tải...</div>
-          ) : detail && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-muted-foreground">NCC:</span> {detail.supplier_name || '-'}</div>
-                <div><span className="text-muted-foreground">Ghi chú:</span> {detail.note || '-'}</div>
-                <div><span className="text-muted-foreground">Tổng tiền:</span> <span className="font-medium">{Number(detail.total_amount).toLocaleString('vi-VN')} VND</span></div>
-                <div><span className="text-muted-foreground">Đã TT:</span> {Number(detail.amount_paid).toLocaleString('vi-VN')} VND</div>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Sản phẩm</TableHead>
-                    <TableHead>Mã lô</TableHead>
-                    <TableHead>HSD</TableHead>
-                    <TableHead className="text-right">SL</TableHead>
-                    <TableHead className="text-right">Đơn giá</TableHead>
-                    <TableHead className="text-right">Thành tiền</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {detail.stock_in_items.map((item, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-medium">{item.products?.name || '-'}</TableCell>
-                      <TableCell className="font-mono text-xs">{item.batch_code || '-'}</TableCell>
-                      <TableCell className="text-sm">{item.expired_date ? new Date(item.expired_date).toLocaleDateString('vi-VN') : '-'}</TableCell>
-                      <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="text-right font-medium">{Number(item.total_price).toLocaleString('vi-VN')}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Detail Dialog (Invoice-style) */}
+      <ViewStockInDetails
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        stockInId={detailStockInId}
+      />
 
       {/* Create Stock-In Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
