@@ -31,6 +31,16 @@ interface Summary {
   loss_total: number
 }
 
+interface FinancialSummary {
+  revenue: number
+  extra_charge: number
+  discount: number
+  cogs: number
+  gross_profit: number
+  operating_expense: number
+  net_profit: number
+}
+
 interface DailySales { date: string; revenue: number; cost: number; profit: number }
 interface DailyLoss { date: string; loss_cost: number }
 interface TopProductSales { product_id: string; product_name: string; quantity_sold: number; revenue: number; profit: number }
@@ -129,6 +139,7 @@ export default function DashboardPage() {
   const [payables, setPayables] = useState<PayableRow[]>([])
   const [cashIn, setCashIn] = useState(0)
   const [cashOut, setCashOut] = useState(0)
+  const [financial, setFinancial] = useState<FinancialSummary | null>(null)
   const loadWarehouses = useCallback(async () => {
     const { data } = await supabase.from('warehouses').select('id, name').order('name')
     if (data && data.length > 0) {
@@ -144,7 +155,7 @@ export default function DashboardPage() {
     const qStart = startDate || '2000-01-01'
     const qEnd = endDate || '2099-12-31'
     try {
-      const [summaryRes, salesRes, lossRes, topSalesRes, topLossRes, expiringRes, receivableRes, payableRes, paymentsInRes, paymentsOutRes] = await Promise.all([
+      const [summaryRes, salesRes, lossRes, topSalesRes, topLossRes, expiringRes, receivableRes, payableRes, paymentsInRes, paymentsOutRes, financialRes] = await Promise.all([
         supabase.rpc('get_dashboard_summary', { p_warehouse_id: warehouseId, p_start_date: qStart, p_end_date: qEnd }),
         supabase.rpc('get_daily_sales_report', { p_warehouse_id: warehouseId, p_start_date: qStart, p_end_date: qEnd }),
         supabase.rpc('get_daily_loss_report', { p_warehouse_id: warehouseId, p_start_date: qStart, p_end_date: qEnd }),
@@ -155,6 +166,7 @@ export default function DashboardPage() {
         supabase.rpc('get_payable_report', { p_warehouse_id: warehouseId }),
         supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'IN').gte('created_at', `${qStart}T00:00:00`).lte('created_at', `${qEnd}T23:59:59`),
         supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'OUT').gte('created_at', `${qStart}T00:00:00`).lte('created_at', `${qEnd}T23:59:59`),
+        supabase.rpc('get_financial_summary', { p_warehouse_id: warehouseId, p_date_from: qStart, p_date_to: qEnd }),
       ])
 
       if (summaryRes.error) throw summaryRes.error
@@ -174,6 +186,7 @@ export default function DashboardPage() {
       setPayables((payableRes.data as PayableRow[]) || [])
       setCashIn((paymentsInRes.data || []).reduce((s: number, p: { amount: number }) => s + Number(p.amount), 0))
       setCashOut((paymentsOutRes.data || []).reduce((s: number, p: { amount: number }) => s + Number(p.amount), 0))
+      setFinancial(financialRes.error ? null : (financialRes.data as FinancialSummary))
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Lỗi tải dữ liệu'
       setError(msg)
@@ -384,6 +397,54 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* Financial Summary KPIs */}
+      {!loading && financial && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Phụ thu</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">{formatVN(financial.extra_charge)}</div>
+              <p className="text-xs text-muted-foreground">VND</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Giảm giá</CardTitle>
+              <TrendingDown className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{formatVN(financial.discount)}</div>
+              <p className="text-xs text-muted-foreground">VND</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Chi phí vận hành</CardTitle>
+              <Banknote className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">{formatVN(financial.operating_expense)}</div>
+              <p className="text-xs text-muted-foreground">VND</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Lợi nhuận ròng</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${financial.net_profit >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                {formatVN(financial.net_profit)}
+              </div>
+              <p className="text-xs text-muted-foreground">VND (sau chi phí)</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-2">

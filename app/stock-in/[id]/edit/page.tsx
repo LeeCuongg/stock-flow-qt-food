@@ -32,6 +32,20 @@ interface EditItem {
   cost_price: number
 }
 
+interface LandedCost {
+  id: string
+  cost_type: string
+  amount: number
+  allocation_method: string
+  created_at: string
+}
+
+interface NewLandedCostEntry {
+  cost_type: string
+  amount: number
+  allocation_method: string
+}
+
 export default function StockInEditPage() {
   const params = useParams()
   const router = useRouter()
@@ -48,6 +62,9 @@ export default function StockInEditPage() {
   const [items, setItems] = useState<EditItem[]>([])
   const [productSearch, setProductSearch] = useState('')
   const [originalStatus, setOriginalStatus] = useState('')
+  const [landedCosts, setLandedCosts] = useState<LandedCost[]>([])
+  const [newLandedCosts, setNewLandedCosts] = useState<NewLandedCostEntry[]>([])
+  const [hasSales, setHasSales] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -84,6 +101,40 @@ export default function StockInEditPage() {
     })))
     setSuppliers(suppRes.data || [])
     setProducts(prodRes.data || [])
+
+    // Load existing landed costs
+    const { data: lcData } = await supabase
+      .from('stock_in_landed_costs')
+      .select('id, cost_type, amount, allocation_method, created_at')
+      .eq('stock_in_id', id)
+      .order('created_at', { ascending: true })
+    setLandedCosts(lcData || [])
+    setNewLandedCosts([])
+
+    // Check if batches have sales
+    let foundSales = false
+    for (const item of si.stock_in_items) {
+      if (foundSales) break
+      const batchQuery = supabase
+        .from('inventory_batches')
+        .select('id')
+        .eq('product_id', item.product_id)
+        .eq('batch_code', item.batch_code)
+      const { data: batches } = item.expired_date
+        ? await batchQuery.eq('expiry_date', item.expired_date)
+        : await batchQuery.is('expiry_date', null)
+      if (batches) {
+        for (const b of batches) {
+          const { count } = await supabase
+            .from('sales_items')
+            .select('id', { count: 'exact', head: true })
+            .eq('batch_id', b.id)
+          if (count && count > 0) { foundSales = true; break }
+        }
+      }
+    }
+    setHasSales(foundSales)
+
     setLoading(false)
   }, [id, router])
 
@@ -116,6 +167,10 @@ export default function StockInEditPage() {
   }
 
   const totalCost = items.reduce((sum, item) => sum + item.quantity * item.cost_price, 0)
+  const existingLandedTotal = landedCosts.reduce((sum, lc) => sum + Number(lc.amount), 0)
+  const newLandedTotal = newLandedCosts.reduce((sum, lc) => sum + lc.amount, 0)
+  const grandTotal = totalCost + existingLandedTotal + newLandedTotal
+  const canAddLandedCost = !hasSales
 
   const handleSubmit = async () => {
     if (items.length === 0) { toast.error('Cần ít nhất 1 sản phẩm'); return }
@@ -145,6 +200,20 @@ export default function StockInEditPage() {
         p_items: rpcItems,
       })
       if (error) throw error
+
+      // Add new landed costs
+      for (const lc of newLandedCosts) {
+        if (lc.amount > 0 && lc.cost_type.trim()) {
+          const { error: lcError } = await supabase.rpc('add_landed_cost', {
+            p_stock_in_id: id,
+            p_cost_type: lc.cost_type.trim(),
+            p_amount: lc.amount,
+            p_allocation_method: lc.allocation_method,
+          })
+          if (lcError) throw lcError
+        }
+      }
+
       toast.success('Cập nhật phiếu nhập thành công')
       router.push(`/stock-in/${id}`)
     } catch (err: unknown) {
@@ -244,7 +313,87 @@ export default function StockInEditPage() {
 
           {items.length > 0 && (
             <div className="flex justify-end pt-2 border-t">
-              <div className="text-sm font-medium">Tổng cộng: <span className="text-lg">{totalCost.toLocaleString('vi-VN')}</span> VND</div>
+              <div className="text-sm font-medium">Tiền hàng: <span className="text-lg">{totalCost.toLocaleString('vi-VN')}</span> VND</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Landed Cost Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Chi phí nhập hàng (Landed Cost)</CardTitle>
+            {canAddLandedCost ? (
+              <Button size="sm" variant="outline" onClick={() => setNewLandedCosts(prev => [...prev, { cost_type: '', amount: 0, allocation_method: 'BY_QUANTITY' }])}>
+                <Plus className="mr-1 h-3 w-3" /> Thêm chi phí
+              </Button>
+            ) : hasSales ? (
+              <span className="text-xs text-muted-foreground">Lô hàng đã được bán</span>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Existing landed costs (read-only) */}
+          {landedCosts.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Đã phân bổ</Label>
+              {landedCosts.map((lc) => (
+                <div key={lc.id} className="flex items-center justify-between border rounded-lg p-3 bg-muted/30">
+                  <div>
+                    <span className="text-sm font-medium">{lc.cost_type}</span>
+                    <Badge variant="outline" className="ml-2 text-xs">
+                      {lc.allocation_method === 'BY_VALUE' ? 'Theo giá trị' : 'Theo SL'}
+                    </Badge>
+                  </div>
+                  <span className="text-sm font-medium">{Number(lc.amount).toLocaleString('vi-VN')} VND</span>
+                </div>
+              ))}
+              {landedCosts.length > 0 && (
+                <div className="text-right text-xs text-muted-foreground">
+                  Tổng đã phân bổ: {existingLandedTotal.toLocaleString('vi-VN')} VND
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* New landed cost entries */}
+          {newLandedCosts.map((lc, idx) => (
+            <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+              <div className="grid gap-1">
+                <Label className="text-xs text-muted-foreground">Loại chi phí</Label>
+                <Input
+                  placeholder="VD: Vận chuyển"
+                  value={lc.cost_type}
+                  onChange={(e) => setNewLandedCosts(prev => prev.map((item, i) => i === idx ? { ...item, cost_type: e.target.value } : item))}
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-xs text-muted-foreground">Số tiền</Label>
+                <CurrencyInput
+                  value={lc.amount}
+                  onValueChange={(v) => setNewLandedCosts(prev => prev.map((item, i) => i === idx ? { ...item, amount: v } : item))}
+                />
+              </div>
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setNewLandedCosts(prev => prev.filter((_, i) => i !== idx))}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+
+          {newLandedTotal > 0 && (
+            <div className="text-right text-xs text-muted-foreground">
+              Chi phí mới: {newLandedTotal.toLocaleString('vi-VN')} VND
+            </div>
+          )}
+
+          {landedCosts.length === 0 && newLandedCosts.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-2">Chưa có chi phí landed cost nào.</p>
+          )}
+
+          {(existingLandedTotal + newLandedTotal) > 0 && (
+            <div className="flex justify-end pt-2 border-t">
+              <div className="text-sm font-medium">Tổng cộng: <span className="text-lg">{grandTotal.toLocaleString('vi-VN')}</span> VND</div>
             </div>
           )}
         </CardContent>

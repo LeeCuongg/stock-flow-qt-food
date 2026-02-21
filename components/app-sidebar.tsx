@@ -37,6 +37,7 @@ import {
   Truck,
   CreditCard,
   Tags,
+  Receipt,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -85,6 +86,11 @@ const navItems = [
     title: 'Danh mục',
     url: '/categories',
     icon: Tags,
+  },
+  {
+    title: 'Chi phí',
+    url: '/expenses',
+    icon: Receipt,
   },
   {
     title: 'Sản phẩm',

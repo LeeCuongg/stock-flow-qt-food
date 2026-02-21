@@ -163,6 +163,8 @@ export default function SalesPage() {
   const [items, setItems] = useState<SaleItem[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
   const [productSearch, setProductSearch] = useState('')
+  // Adjustments in create dialog
+  const [createAdjustments, setCreateAdjustments] = useState<{ type: string; amount: number; note: string }[]>([])
   // Payment modal
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payingSale, setPayingSale] = useState<SaleRecord | null>(null)
@@ -278,6 +280,7 @@ export default function SalesPage() {
     setItems([])
     setSelectedProductId('')
     setProductSearch('')
+    setCreateAdjustments([])
     setDialogOpen(true)
     loadBatches()
   }
@@ -319,10 +322,17 @@ export default function SalesPage() {
   const totalRevenue = items.reduce((sum, i) => sum + i.quantity * i.sale_price, 0)
   const totalCost = items.reduce((sum, i) => sum + i.quantity * i.batch_cost_price, 0)
   const totalProfit = totalRevenue - totalCost
+  const totalExtraCharge = createAdjustments.filter(a => a.type === 'EXTRA_CHARGE').reduce((s, a) => s + a.amount, 0)
+  const totalDiscount = createAdjustments.filter(a => a.type === 'DISCOUNT').reduce((s, a) => s + a.amount, 0)
+  const adjustedRevenue = totalRevenue + totalExtraCharge - totalDiscount
 
   const handleSubmit = async () => {
     if (items.length === 0) {
       toast.error('Vui lòng thêm ít nhất 1 sản phẩm')
+      return
+    }
+    if (!selectedCustomerId && !customerName.trim()) {
+      toast.error('Vui lòng chọn hoặc nhập tên khách hàng')
       return
     }
     for (const item of items) {
@@ -350,15 +360,28 @@ export default function SalesPage() {
       }
 
       let customerId = selectedCustomerId || null
-      // Auto-create customer if new name entered
+      // Auto-create or reuse existing customer (match by name + phone + address)
       if (!customerId && customerName.trim()) {
-        const { data: newCust, error: cErr } = await supabase
-          .from('customers')
-          .insert({ name: customerName.trim(), phone: customerPhone.trim() || null, address: customerAddress.trim() || null, warehouse_id: warehouseId })
-          .select('id')
-          .single()
-        if (cErr) throw cErr
-        customerId = newCust.id
+        const trimmedName = customerName.trim()
+        const trimmedPhone = customerPhone.trim() || null
+        const trimmedAddress = customerAddress.trim() || null
+        let q = supabase.from('customers').select('id').ilike('name', trimmedName)
+        if (trimmedPhone) q = q.eq('phone', trimmedPhone)
+        else q = q.is('phone', null)
+        if (trimmedAddress) q = q.eq('address', trimmedAddress)
+        else q = q.is('address', null)
+        const { data: existing } = await q.limit(1)
+        if (existing && existing.length > 0) {
+          customerId = existing[0].id
+        } else {
+          const { data: newCust, error: cErr } = await supabase
+            .from('customers')
+            .insert({ name: trimmedName, phone: trimmedPhone, address: trimmedAddress, warehouse_id: warehouseId })
+            .select('id')
+            .single()
+          if (cErr) throw cErr
+          customerId = newCust.id
+        }
       }
 
       const rpcItems = items.map((item) => ({
@@ -368,7 +391,7 @@ export default function SalesPage() {
         sale_price: item.sale_price,
       }))
 
-      const { error } = await supabase.rpc('create_sale', {
+      const { data: saleResult, error } = await supabase.rpc('create_sale', {
         p_warehouse_id: warehouseId,
         p_customer_name: customerName.trim() || null,
         p_note: note.trim() || null,
@@ -378,6 +401,19 @@ export default function SalesPage() {
       })
 
       if (error) throw error
+
+      // Insert adjustments if any
+      if (createAdjustments.length > 0 && saleResult) {
+        const adjRows = createAdjustments.map(a => ({
+          sale_id: saleResult,
+          adjustment_type: a.type,
+          amount: a.amount,
+          note: a.note.trim() || null,
+        }))
+        const { error: adjErr } = await supabase.from('sale_adjustments').insert(adjRows)
+        if (adjErr) toast.error('Đơn đã tạo nhưng lỗi thêm phụ phí: ' + adjErr.message)
+      }
+
       toast.success('Tạo đơn xuất kho thành công')
       setDialogOpen(false)
       loadRecords()
@@ -693,7 +729,7 @@ export default function SalesPage() {
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Khách hàng</Label>
+                <Label>Khách hàng *</Label>
                 <Select value={selectedCustomerId} onValueChange={(val) => {
                   if (val === 'none') {
                     setSelectedCustomerId('')
@@ -870,6 +906,24 @@ export default function SalesPage() {
                     <span className="text-muted-foreground">Tổng giá vốn:</span>
                     <span className="font-medium">{totalCost.toLocaleString('vi-VN')} VND</span>
                   </div>
+                  {totalExtraCharge > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Phụ thu:</span>
+                      <span className="font-medium text-orange-600">+{totalExtraCharge.toLocaleString('vi-VN')} VND</span>
+                    </div>
+                  )}
+                  {totalDiscount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Giảm giá:</span>
+                      <span className="font-medium text-green-600">-{totalDiscount.toLocaleString('vi-VN')} VND</span>
+                    </div>
+                  )}
+                  {(totalExtraCharge > 0 || totalDiscount > 0) && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Tổng sau điều chỉnh:</span>
+                      <span className="font-bold">{adjustedRevenue.toLocaleString('vi-VN')} VND</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm font-medium">
                     <span>Lợi nhuận:</span>
                     <span className={totalProfit >= 0 ? 'text-green-600' : 'text-destructive'}>
@@ -879,6 +933,32 @@ export default function SalesPage() {
                 </div>
               </div>
             )}
+
+            {/* Adjustments section */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Phụ phí / Giảm giá</Label>
+                <Button type="button" variant="outline" size="sm" onClick={() => setCreateAdjustments(prev => [...prev, { type: 'EXTRA_CHARGE', amount: 0, note: '' }])}>
+                  <Plus className="mr-1 h-3 w-3" /> Thêm
+                </Button>
+              </div>
+              {createAdjustments.map((adj, idx) => (
+                <div key={idx} className="flex items-center gap-2 border rounded-md p-2">
+                  <Select value={adj.type} onValueChange={(val) => setCreateAdjustments(prev => prev.map((a, i) => i === idx ? { ...a, type: val } : a))}>
+                    <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EXTRA_CHARGE">Phụ thu</SelectItem>
+                      <SelectItem value="DISCOUNT">Giảm giá</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <CurrencyInput value={adj.amount} onValueChange={(v) => setCreateAdjustments(prev => prev.map((a, i) => i === idx ? { ...a, amount: v } : a))} className="h-8 w-[130px] text-xs" />
+                  <Input placeholder="Ghi chú" value={adj.note} onChange={(e) => setCreateAdjustments(prev => prev.map((a, i) => i === idx ? { ...a, note: e.target.value } : a))} className="h-8 text-xs flex-1" />
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setCreateAdjustments(prev => prev.filter((_, i) => i !== idx))}>
+                    <Trash2 className="h-3 w-3 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
 
           <DialogFooter>

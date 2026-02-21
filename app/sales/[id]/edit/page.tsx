@@ -57,10 +57,12 @@ export default function SaleEditPage() {
   const [selectedProductId, setSelectedProductId] = useState('')
   const [productSearch, setProductSearch] = useState('')
   const [originalStatus, setOriginalStatus] = useState('')
+  // Adjustments
+  const [editAdjustments, setEditAdjustments] = useState<{ id?: string; type: string; amount: number; note: string }[]>([])
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [saleRes, custRes, prodRes, batchRes] = await Promise.all([
+    const [saleRes, custRes, prodRes, batchRes, adjRes] = await Promise.all([
       supabase
         .from('sales')
         .select('id, customer_id, note, status, amount_paid, sales_items(product_id, batch_id, quantity, sale_price, cost_price, products(name, unit), inventory_batches(id, batch_code, quantity_remaining, cost_price, expiry_date))')
@@ -69,6 +71,7 @@ export default function SaleEditPage() {
       supabase.from('customers').select('id, name').order('name'),
       supabase.from('products').select('id, name, sku, unit, default_sale_price').order('name'),
       supabase.from('inventory_batches').select('id, product_id, batch_code, quantity_remaining, cost_price, expiry_date').order('expiry_date', { ascending: true, nullsFirst: false }),
+      supabase.from('sale_adjustments').select('id, adjustment_type, amount, note').eq('sale_id', id).order('created_at'),
     ])
 
     if (saleRes.error) { toast.error('Không tìm thấy đơn xuất'); router.push('/sales'); return }
@@ -102,6 +105,12 @@ export default function SaleEditPage() {
     setCustomers(custRes.data || [])
     setProducts(prodRes.data || [])
     setBatches(batchRes.data || [])
+    setEditAdjustments((adjRes.data || []).map((a: { id: string; adjustment_type: string; amount: number; note: string | null }) => ({
+      id: a.id,
+      type: a.adjustment_type,
+      amount: Number(a.amount),
+      note: a.note || '',
+    })))
     setLoading(false)
   }, [id, router])
 
@@ -148,6 +157,9 @@ export default function SaleEditPage() {
   const totalRevenue = items.reduce((sum, i) => sum + i.quantity * i.sale_price, 0)
   const totalCost = items.reduce((sum, i) => sum + i.quantity * i.batch_cost_price, 0)
   const totalProfit = totalRevenue - totalCost
+  const totalExtraCharge = editAdjustments.filter(a => a.type === 'EXTRA_CHARGE').reduce((s, a) => s + a.amount, 0)
+  const totalDiscount = editAdjustments.filter(a => a.type === 'DISCOUNT').reduce((s, a) => s + a.amount, 0)
+  const adjustedRevenue = totalRevenue + totalExtraCharge - totalDiscount
 
   const maxQty = (item: EditSaleItem) => item.batch_remaining + item.old_qty
 
@@ -178,6 +190,20 @@ export default function SaleEditPage() {
         p_items: rpcItems,
       })
       if (error) throw error
+      // Sync adjustments: delete all old, insert current
+      await supabase.from('sale_adjustments').delete().eq('sale_id', id)
+      if (editAdjustments.length > 0) {
+        const adjRows = editAdjustments.filter(a => a.amount > 0).map(a => ({
+          sale_id: id,
+          adjustment_type: a.type,
+          amount: a.amount,
+          note: a.note.trim() || null,
+        }))
+        if (adjRows.length > 0) {
+          const { error: adjErr } = await supabase.from('sale_adjustments').insert(adjRows)
+          if (adjErr) toast.error('Lỗi lưu phụ phí: ' + adjErr.message)
+        }
+      }
       toast.success('Cập nhật đơn xuất thành công')
       router.push(`/sales/${id}`)
     } catch (err: unknown) {
@@ -315,6 +341,24 @@ export default function SaleEditPage() {
                 <span className="text-muted-foreground">Tổng giá vốn:</span>
                 <span className="font-medium">{totalCost.toLocaleString('vi-VN')} VND</span>
               </div>
+              {totalExtraCharge > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Phụ thu:</span>
+                  <span className="font-medium text-orange-600">+{totalExtraCharge.toLocaleString('vi-VN')} VND</span>
+                </div>
+              )}
+              {totalDiscount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Giảm giá:</span>
+                  <span className="font-medium text-green-600">-{totalDiscount.toLocaleString('vi-VN')} VND</span>
+                </div>
+              )}
+              {(totalExtraCharge > 0 || totalDiscount > 0) && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Tổng sau điều chỉnh:</span>
+                  <span className="font-bold">{adjustedRevenue.toLocaleString('vi-VN')} VND</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm font-medium">
                 <span>Lợi nhuận:</span>
                 <span className={totalProfit >= 0 ? 'text-green-600' : 'text-destructive'}>
@@ -322,6 +366,40 @@ export default function SaleEditPage() {
                 </span>
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Adjustments Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Phụ phí / Giảm giá</CardTitle>
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditAdjustments(prev => [...prev, { type: 'EXTRA_CHARGE', amount: 0, note: '' }])}>
+              <Plus className="mr-1 h-3 w-3" /> Thêm
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {editAdjustments.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Chưa có phụ phí / giảm giá</p>
+          ) : (
+            editAdjustments.map((adj, idx) => (
+              <div key={idx} className="flex items-center gap-2 border rounded-md p-2">
+                <Select value={adj.type} onValueChange={(val) => setEditAdjustments(prev => prev.map((a, i) => i === idx ? { ...a, type: val } : a))}>
+                  <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EXTRA_CHARGE">Phụ thu</SelectItem>
+                    <SelectItem value="DISCOUNT">Giảm giá</SelectItem>
+                  </SelectContent>
+                </Select>
+                <CurrencyInput value={adj.amount} onValueChange={(v) => setEditAdjustments(prev => prev.map((a, i) => i === idx ? { ...a, amount: v } : a))} className="h-8 w-[130px] text-xs" />
+                <Input placeholder="Ghi chú" value={adj.note} onChange={(e) => setEditAdjustments(prev => prev.map((a, i) => i === idx ? { ...a, note: e.target.value } : a))} className="h-8 text-xs flex-1" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditAdjustments(prev => prev.filter((_, i) => i !== idx))}>
+                  <Trash2 className="h-3 w-3 text-destructive" />
+                </Button>
+              </div>
+            ))
           )}
         </CardContent>
       </Card>

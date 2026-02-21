@@ -162,6 +162,10 @@ export default function StockInPage() {
   const [cancellingRecord, setCancellingRecord] = useState<StockInRecord | null>(null)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelSaving, setCancelSaving] = useState(false)
+  // Landed costs for create form
+  interface LandedCostEntry { cost_type: string; amount: number; allocation_method: string }
+  const [landedCostEntries, setLandedCostEntries] = useState<LandedCostEntry[]>([])
+  // Note: BY_VALUE hidden for now, default BY_QUANTITY
   // Filters
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
@@ -246,6 +250,7 @@ export default function StockInPage() {
     setCreatedDate(new Date().toISOString().split('T')[0])
     setItems([])
     setProductSearch('')
+    setLandedCostEntries([])
     setDialogOpen(true)
   }
 
@@ -293,6 +298,8 @@ export default function StockInPage() {
   }
 
   const totalCost = items.reduce((sum, item) => sum + item.quantity * item.cost_price, 0)
+  const totalLandedCost = landedCostEntries.reduce((sum, lc) => sum + lc.amount, 0)
+  const grandTotal = totalCost + totalLandedCost
 
   const openStockInPayment = (record: StockInRecord) => {
     setPayingRecord(record)
@@ -362,6 +369,10 @@ export default function StockInPage() {
       toast.error('Vui lòng thêm ít nhất 1 sản phẩm')
       return
     }
+    if (!selectedSupplierId && !supplierName.trim()) {
+      toast.error('Vui lòng chọn hoặc nhập tên nhà cung cấp')
+      return
+    }
     for (const item of items) {
       if (!item.batch_code.trim()) {
         toast.error(`Mã lô không được để trống (${item.product_name})`)
@@ -388,15 +399,28 @@ export default function StockInPage() {
       }
 
       let supplierId = selectedSupplierId || null
-      // Auto-create supplier if new name entered
+      // Auto-create or reuse existing supplier (match by name + phone + address)
       if (!supplierId && supplierName.trim()) {
-        const { data: newSupplier, error: sErr } = await supabase
-          .from('suppliers')
-          .insert({ name: supplierName.trim(), phone: supplierPhone.trim() || null, address: supplierAddress.trim() || null, warehouse_id: warehouseId })
-          .select('id')
-          .single()
-        if (sErr) throw sErr
-        supplierId = newSupplier.id
+        const trimmedName = supplierName.trim()
+        const trimmedPhone = supplierPhone.trim() || null
+        const trimmedAddress = supplierAddress.trim() || null
+        let q = supabase.from('suppliers').select('id').ilike('name', trimmedName)
+        if (trimmedPhone) q = q.eq('phone', trimmedPhone)
+        else q = q.is('phone', null)
+        if (trimmedAddress) q = q.eq('address', trimmedAddress)
+        else q = q.is('address', null)
+        const { data: existing } = await q.limit(1)
+        if (existing && existing.length > 0) {
+          supplierId = existing[0].id
+        } else {
+          const { data: newSupplier, error: sErr } = await supabase
+            .from('suppliers')
+            .insert({ name: trimmedName, phone: trimmedPhone, address: trimmedAddress, warehouse_id: warehouseId })
+            .select('id')
+            .single()
+          if (sErr) throw sErr
+          supplierId = newSupplier.id
+        }
       }
 
       const rpcItems = items.map((item) => ({
@@ -407,7 +431,7 @@ export default function StockInPage() {
         cost_price: item.cost_price,
       }))
 
-      const { error } = await supabase.rpc('create_stock_in', {
+      const { data: stockInResult, error } = await supabase.rpc('create_stock_in', {
         p_warehouse_id: warehouseId,
         p_supplier_name: supplierName.trim() || null,
         p_note: note.trim() || null,
@@ -417,6 +441,21 @@ export default function StockInPage() {
       })
 
       if (error) throw error
+
+      // Add landed costs if any
+      const stockInId = stockInResult as string
+      for (const lc of landedCostEntries) {
+        if (lc.amount > 0 && lc.cost_type.trim()) {
+          const { error: lcError } = await supabase.rpc('add_landed_cost', {
+            p_stock_in_id: stockInId,
+            p_cost_type: lc.cost_type.trim(),
+            p_amount: lc.amount,
+            p_allocation_method: lc.allocation_method,
+          })
+          if (lcError) throw lcError
+        }
+      }
+
       toast.success('Tạo phiếu nhập kho thành công')
       setDialogOpen(false)
       loadRecords()
@@ -655,7 +694,7 @@ export default function StockInPage() {
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Nhà cung cấp</Label>
+                <Label>Nhà cung cấp *</Label>
                 <Select value={selectedSupplierId} onValueChange={(val) => {
                   if (val === 'none') {
                     setSelectedSupplierId('')
@@ -787,9 +826,59 @@ export default function StockInPage() {
                 ))}
                 <div className="flex justify-end pt-2 border-t">
                   <div className="text-sm font-medium">
-                    Tổng cộng: <span className="text-lg">{totalCost.toLocaleString('vi-VN')}</span> VND
+                    Tiền hàng: <span className="text-lg">{totalCost.toLocaleString('vi-VN')}</span> VND
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Landed Cost Section */}
+            {items.length > 0 && (
+              <div className="space-y-3 border rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <Label>Chi phí nhập hàng (Landed Cost)</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setLandedCostEntries(prev => [...prev, { cost_type: '', amount: 0, allocation_method: 'BY_QUANTITY' }])}>
+                    <Plus className="mr-1 h-3 w-3" /> Thêm chi phí
+                  </Button>
+                </div>
+                {landedCostEntries.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Chưa có chi phí nào. VD: Vận chuyển, Thuế nhập khẩu...</p>
+                ) : (
+                  landedCostEntries.map((lc, idx) => (
+                    <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                      <div className="grid gap-1">
+                        <Label className="text-xs text-muted-foreground">Loại chi phí</Label>
+                        <Input
+                          placeholder="VD: Vận chuyển"
+                          value={lc.cost_type}
+                          onChange={(e) => setLandedCostEntries(prev => prev.map((item, i) => i === idx ? { ...item, cost_type: e.target.value } : item))}
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label className="text-xs text-muted-foreground">Số tiền</Label>
+                        <CurrencyInput
+                          value={lc.amount}
+                          onValueChange={(v) => setLandedCostEntries(prev => prev.map((item, i) => i === idx ? { ...item, amount: v } : item))}
+                        />
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setLandedCostEntries(prev => prev.filter((_, i) => i !== idx))}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+                {totalLandedCost > 0 && (
+                  <div className="text-right text-sm text-muted-foreground pt-1">
+                    Tổng chi phí: <span className="font-medium text-foreground">{totalLandedCost.toLocaleString('vi-VN')} VND</span>
+                  </div>
+                )}
+                {items.length > 0 && (totalLandedCost > 0 || landedCostEntries.length > 0) && (
+                  <div className="flex justify-end pt-2 border-t">
+                    <div className="text-sm font-medium">
+                      Tổng cộng: <span className="text-lg">{grandTotal.toLocaleString('vi-VN')}</span> VND
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
