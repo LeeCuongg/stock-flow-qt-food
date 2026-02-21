@@ -36,6 +36,8 @@ interface Payment {
   payment_method: string | null
   note: string | null
   created_at: string
+  status: string
+  void_reason: string | null
 }
 
 interface ViewStockInDetailsProps {
@@ -75,11 +77,12 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
 
       // Load payments
       const { data: payData } = await supabase
-        .from('stock_in_payments')
-        .select('id, amount, payment_method, note, created_at')
-        .eq('stock_in_id', stockInId)
+        .from('payments')
+        .select('id, amount, payment_method, note, created_at, status, void_reason')
+        .eq('source_type', 'STOCK_IN')
+        .eq('source_id', stockInId)
         .order('created_at', { ascending: true })
-      setPayments(payData || [])
+      setPayments((payData as unknown as Payment[]) || [])
     } catch {
       toast.error("Không thể tải chi tiết phiếu nhập")
       onClose()
@@ -196,7 +199,7 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
   if (!open) return null
 
   const merchandiseTotal = details ? details.stock_in_items.reduce((s, i) => s + Number(i.total_price), 0) : 0
-  const paymentsTotal = payments.reduce((s, p) => s + Number(p.amount), 0)
+  const paymentsTotal = payments.filter(p => p.status !== 'VOIDED').reduce((s, p) => s + Number(p.amount), 0)
   const remaining = details ? Number(details.total_amount) - paymentsTotal : 0
 
   return (
@@ -323,7 +326,7 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
                   </thead>
                   <tbody>
                     {payments.map((payment, index) => (
-                      <tr key={payment.id} className="hover:bg-gray-50 print:hover:bg-white">
+                      <tr key={payment.id} className={`hover:bg-gray-50 print:hover:bg-white ${payment.status === 'VOIDED' ? 'opacity-50 line-through' : ''}`}>
                         <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center">{index + 1}</td>
                         <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center">
                           {fmtDateTime(payment.created_at)}
@@ -332,7 +335,7 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
                           {payment.payment_method || "---"}
                         </td>
                         <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-left text-gray-600">
-                          {payment.note || "---"}
+                          {payment.status === 'VOIDED' ? `[Đã huỷ] ${payment.void_reason || ''}` : (payment.note || "---")}
                         </td>
                         <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center font-medium">
                           {fmt(payment.amount)}

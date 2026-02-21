@@ -109,6 +109,17 @@ export default function SuppliersPage() {
 
   const handleDelete = async () => {
     if (!deleting) return
+    // Check for active stock_in linked to this supplier
+    const { count } = await supabase
+      .from('stock_in')
+      .select('id', { count: 'exact', head: true })
+      .eq('supplier_id', deleting.id)
+      .neq('status', 'CANCELLED')
+    if (count && count > 0) {
+      toast.error(`Không thể xoá: nhà cung cấp "${deleting.name}" đang có ${count} phiếu nhập chưa huỷ`)
+      setDeleteOpen(false)
+      return
+    }
     const { error } = await supabase.from('suppliers').delete().eq('id', deleting.id)
     if (error) toast.error(`Lỗi: ${error.message}`)
     else { toast.success('Đã xóa'); setDeleteOpen(false); load() }
@@ -128,6 +139,7 @@ export default function SuppliersPage() {
       .select('id, created_at, total_amount, amount_paid, supplier_name')
       .eq('supplier_id', s.id)
       .neq('payment_status', 'PAID')
+      .neq('status', 'CANCELLED')
       .gt('total_amount', 0)
       .order('created_at', { ascending: true })
     setUnpaidStockIns((data as UnpaidStockIn[]) || [])

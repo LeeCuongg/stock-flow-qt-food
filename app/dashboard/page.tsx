@@ -164,8 +164,8 @@ export default function DashboardPage() {
         supabase.rpc('get_expiring_batches', { p_warehouse_id: warehouseId, p_days_threshold: 30 }),
         supabase.rpc('get_receivable_report', { p_warehouse_id: warehouseId }),
         supabase.rpc('get_payable_report', { p_warehouse_id: warehouseId }),
-        supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'IN').gte('created_at', `${qStart}T00:00:00`).lte('created_at', `${qEnd}T23:59:59`),
-        supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'OUT').gte('created_at', `${qStart}T00:00:00`).lte('created_at', `${qEnd}T23:59:59`),
+        supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'IN').eq('status', 'ACTIVE').gte('created_at', `${qStart}T00:00:00`).lte('created_at', `${qEnd}T23:59:59`),
+        supabase.from('payments').select('amount').eq('warehouse_id', warehouseId).eq('payment_type', 'OUT').eq('status', 'ACTIVE').gte('created_at', `${qStart}T00:00:00`).lte('created_at', `${qEnd}T23:59:59`),
         supabase.rpc('get_financial_summary', { p_warehouse_id: warehouseId, p_date_from: qStart, p_date_to: qEnd }),
       ])
 
@@ -356,7 +356,7 @@ export default function DashboardPage() {
           <>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Phải thu</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Khách hàng nợ</CardTitle>
                 <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -366,7 +366,7 @@ export default function DashboardPage() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Phải trả</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Giá vốn nợ</CardTitle>
                 <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>

@@ -17,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, ShoppingCart, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
+import { Plus, Trash2, ShoppingCart, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
@@ -574,7 +574,7 @@ export default function SalesPage() {
                   <TableHead className="text-right">Doanh thu</TableHead>
                   <TableHead className="text-right">Đã TT</TableHead>
                   <TableHead>Trạng thái</TableHead>
-                  <TableHead className="text-right">Lợi nhuận</TableHead>
+                  <TableHead>Ghi chú</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
@@ -590,16 +590,9 @@ export default function SalesPage() {
                       {Number(r.amount_paid).toLocaleString('vi-VN')}
                     </TableCell>
                     <TableCell>{paymentStatusBadge(r.payment_status)}</TableCell>
-                    <TableCell className="text-right">
-                      <span className={Number(r.profit) >= 0 ? 'text-green-600' : 'text-destructive'}>
-                        {Number(r.profit).toLocaleString('vi-VN')}
-                      </span>
-                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">{r.note || '-'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openSaleDetail(r) }}>
-                          <FileText className="mr-1 h-3 w-3" /> Phiếu
-                        </Button>
                         {Number(r.amount_paid) === 0 && (
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/sales/${r.id}/edit`) }}>
                             <Pencil className="mr-1 h-3 w-3" /> Sửa

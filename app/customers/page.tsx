@@ -109,6 +109,17 @@ export default function CustomersPage() {
 
   const handleDelete = async () => {
     if (!deleting) return
+    // Check for active sales linked to this customer
+    const { count } = await supabase
+      .from('sales')
+      .select('id', { count: 'exact', head: true })
+      .eq('customer_id', deleting.id)
+      .neq('status', 'CANCELLED')
+    if (count && count > 0) {
+      toast.error(`Không thể xoá: khách hàng "${deleting.name}" đang có ${count} đơn bán chưa huỷ`)
+      setDeleteOpen(false)
+      return
+    }
     const { error } = await supabase.from('customers').delete().eq('id', deleting.id)
     if (error) toast.error(`Lỗi: ${error.message}`)
     else { toast.success('Đã xóa'); setDeleteOpen(false); load() }
@@ -128,6 +139,7 @@ export default function CustomersPage() {
       .select('id, created_at, total_revenue, amount_paid, customer_name')
       .eq('customer_id', c.id)
       .neq('payment_status', 'PAID')
+      .neq('status', 'CANCELLED')
       .gt('total_revenue', 0)
       .order('created_at', { ascending: true })
     setUnpaidSales((data as UnpaidSale[]) || [])

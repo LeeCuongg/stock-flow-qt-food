@@ -17,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, PackagePlus, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
+import { Plus, Trash2, PackagePlus, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
@@ -566,9 +566,6 @@ export default function StockInPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(r) }}>
-                          <FileText className="mr-1 h-3 w-3" /> Phiếu
-                        </Button>
                         {Number(r.amount_paid) === 0 && (
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}/edit`) }}>
                             <Pencil className="mr-1 h-3 w-3" /> Sửa

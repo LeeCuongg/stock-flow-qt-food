@@ -7,8 +7,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { CreditCard } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import { CreditCard, Ban } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Payment {
@@ -20,6 +22,9 @@ interface Payment {
   payment_method: string
   note: string | null
   created_at: string
+  status: string
+  void_reason: string | null
+  voided_at: string | null
   customers: { name: string } | null
   suppliers: { name: string } | null
 }
@@ -45,7 +50,22 @@ export default function PaymentsPage() {
   const [detailPayment, setDetailPayment] = useState<Payment | null>(null)
   const [detailItems, setDetailItems] = useState<SourceItem[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [voidOpen, setVoidOpen] = useState(false)
+  const [voidReason, setVoidReason] = useState('')
+  const [voidSaving, setVoidSaving] = useState(false)
   const supabase = createClient()
+
+  // Check admin role
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase.from('user_profiles').select('role').eq('id', user.id).single()
+        if (data?.role === 'admin') setIsAdmin(true)
+      }
+    })()
+  }, [])
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -91,7 +111,6 @@ export default function PaymentsPage() {
         }
       }
     }
-    // Deduplicate batch codes per source
     for (const key of Object.keys(map)) {
       const codes = [...new Set(map[key].split(', '))]
       map[key] = codes.join(', ')
@@ -126,6 +145,27 @@ export default function PaymentsPage() {
       setDetailItems((data as unknown as SourceItem[]) || [])
     }
     setDetailLoading(false)
+  }
+
+  const handleVoidPayment = async () => {
+    if (!detailPayment) return
+    if (!voidReason.trim()) { toast.error('Vui lòng nhập lý do huỷ'); return }
+    setVoidSaving(true)
+    try {
+      const { error } = await supabase.rpc('void_payment', {
+        p_payment_id: detailPayment.id,
+        p_reason: voidReason.trim(),
+      })
+      if (error) throw error
+      toast.success('Đã huỷ thanh toán thành công')
+      setVoidOpen(false)
+      setDetailOpen(false)
+      load()
+    } catch (err: unknown) {
+      toast.error(`Lỗi: ${err instanceof Error ? err.message : 'Không xác định'}`)
+    } finally {
+      setVoidSaving(false)
+    }
   }
 
   return (
@@ -199,21 +239,27 @@ export default function PaymentsPage() {
                   </TableHeader>
                   <TableBody>
                     {filtered.map((p) => (
-                      <TableRow key={p.id} className="cursor-pointer" onClick={() => openDetail(p)}>
+                      <TableRow
+                        key={p.id}
+                        className={`cursor-pointer ${p.status === 'VOIDED' ? 'opacity-50 line-through' : ''}`}
+                        onClick={() => openDetail(p)}
+                      >
                         <TableCell className="text-sm">{new Date(p.created_at).toLocaleDateString('vi-VN')}</TableCell>
                         <TableCell>
-                          {p.payment_type === 'IN'
-                            ? <Badge className="bg-green-600 text-white hover:bg-green-700">Thu</Badge>
-                            : <Badge variant="destructive">Chi</Badge>}
+                          {p.status === 'VOIDED'
+                            ? <Badge variant="outline" className="text-muted-foreground">Đã huỷ</Badge>
+                            : p.payment_type === 'IN'
+                              ? <Badge className="bg-green-600 text-white hover:bg-green-700">Thu</Badge>
+                              : <Badge variant="destructive">Chi</Badge>}
                         </TableCell>
                         <TableCell className="text-sm">{p.source_type === 'SALE' ? 'Đơn bán' : 'Phiếu nhập'}</TableCell>
                         <TableCell>{p.customers?.name || p.suppliers?.name || '-'}</TableCell>
                         <TableCell className="font-mono text-xs max-w-[150px] truncate">{batchMap[p.source_id] || '-'}</TableCell>
-                        <TableCell className={`text-right font-medium ${p.payment_type === 'IN' ? 'text-green-600' : 'text-destructive'}`}>
+                        <TableCell className={`text-right font-medium ${p.status === 'VOIDED' ? 'text-muted-foreground' : p.payment_type === 'IN' ? 'text-green-600' : 'text-destructive'}`}>
                           {p.payment_type === 'IN' ? '+' : '-'}{Number(p.amount).toLocaleString('vi-VN')}
                         </TableCell>
                         <TableCell><Badge variant="outline">{METHOD_LABELS[p.payment_method] || p.payment_method}</Badge></TableCell>
-                        <TableCell className="max-w-[150px] truncate text-sm">{p.note || '-'}</TableCell>
+                        <TableCell className="max-w-[150px] truncate text-sm">{p.status === 'VOIDED' ? `[Đã huỷ] ${p.void_reason || ''}` : (p.note || '-')}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -235,6 +281,13 @@ export default function PaymentsPage() {
           </DialogHeader>
           {detailPayment && (
             <div className="space-y-4 text-sm">
+              {detailPayment.status === 'VOIDED' && (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+                  <p className="font-medium text-destructive">Thanh toán này đã bị huỷ</p>
+                  {detailPayment.void_reason && <p className="text-sm text-muted-foreground mt-1">Lý do: {detailPayment.void_reason}</p>}
+                  {detailPayment.voided_at && <p className="text-xs text-muted-foreground mt-1">Huỷ lúc: {new Date(detailPayment.voided_at).toLocaleString('vi-VN')}</p>}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div><span className="text-muted-foreground">Loại:</span><br/>{detailPayment.payment_type === 'IN' ? <Badge className="bg-green-600 text-white">Thu</Badge> : <Badge variant="destructive">Chi</Badge>}</div>
                 <div><span className="text-muted-foreground">Nguồn:</span><br/>{detailPayment.source_type === 'SALE' ? 'Đơn bán' : 'Phiếu nhập'}</div>
@@ -275,8 +328,52 @@ export default function PaymentsPage() {
                   </div>
                 )}
               </div>
+              {/* Void button - admin only, active payments only */}
+              {isAdmin && (!detailPayment.status || detailPayment.status === 'ACTIVE') && (
+                <div className="pt-2 border-t">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => { setVoidReason(''); setVoidOpen(true) }}
+                  >
+                    <Ban className="h-4 w-4 mr-2" />
+                    Huỷ thanh toán này
+                  </Button>
+                </div>
+              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Void Confirmation Dialog */}
+      <Dialog open={voidOpen} onOpenChange={setVoidOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xác nhận huỷ thanh toán</DialogTitle>
+            <DialogDescription>
+              Huỷ khoản {detailPayment?.payment_type === 'IN' ? 'thu' : 'chi'}{' '}
+              {Number(detailPayment?.amount || 0).toLocaleString('vi-VN')} VND.
+              Số tiền sẽ được trừ khỏi phiếu gốc.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Nhập lý do huỷ thanh toán..."
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVoidOpen(false)} disabled={voidSaving}>
+              Đóng
+            </Button>
+            <Button variant="destructive" onClick={handleVoidPayment} disabled={voidSaving || !voidReason.trim()}>
+              {voidSaving ? 'Đang xử lý...' : 'Xác nhận huỷ'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
