@@ -69,6 +69,13 @@ function formatQty(n: number): string {
 function shortDate(dateStr: string): string {
   const d = new Date(dateStr); return `${d.getDate()}/${d.getMonth() + 1}`
 }
+function shortMoney(v: number): string {
+  const abs = Math.abs(v)
+  if (abs >= 1_000_000_000) { const n = v / 1_000_000_000; return `${n % 1 === 0 ? n.toFixed(0) : n.toFixed(1)}tỷ` }
+  if (abs >= 1_000_000) { const n = v / 1_000_000; return `${n % 1 === 0 ? n.toFixed(0) : n.toFixed(1)}tr` }
+  if (abs >= 1_000) return `${(v / 1_000).toFixed(0)}k`
+  return `${v}`
+}
 
 const COLORS = [
   'hsl(142, 76%, 36%)', 'hsl(221, 83%, 53%)', 'hsl(0, 84%, 60%)',
@@ -454,10 +461,10 @@ export default function DashboardPage() {
               <CardContent>
                 {loading ? <Skeleton className="h-[250px] w-full" /> : dailySales.length === 0 ? <NoData /> : (
                   <ChartContainer config={salesChartConfig} className="h-[250px] w-full">
-                    <BarChart data={dailySales} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                    <BarChart data={dailySales} margin={{ top: 5, right: 5, bottom: 5, left: 5 }} maxBarSize={50}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tickFormatter={shortDate} className="text-xs" />
-                      <YAxis className="text-xs" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <YAxis className="text-xs" tickFormatter={shortMoney} />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="profit" fill="var(--color-profit)" radius={[4, 4, 0, 0]} />
@@ -474,7 +481,7 @@ export default function DashboardPage() {
                     <LineChart data={dailyLoss} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tickFormatter={shortDate} className="text-xs" />
-                      <YAxis className="text-xs" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <YAxis className="text-xs" tickFormatter={shortMoney} />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Line type="monotone" dataKey="loss_cost" stroke="var(--color-loss_cost)" strokeWidth={2} dot={{ r: 3 }} />
                     </LineChart>
@@ -500,10 +507,10 @@ export default function DashboardPage() {
                     { name: 'LN gộp', value: financial.gross_profit, fill: 'hsl(221, 83%, 53%)' },
                     { name: 'CP vận hành', value: financial.operating_expense, fill: 'hsl(330, 70%, 55%)' },
                     { name: 'LN ròng', value: financial.net_profit, fill: financial.net_profit >= 0 ? 'hsl(142, 76%, 36%)' : 'hsl(0, 84%, 60%)' },
-                  ]} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                  ]} margin={{ top: 5, right: 5, bottom: 5, left: 5 }} maxBarSize={50}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="name" className="text-xs" />
-                    <YAxis className="text-xs" tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
+                    <YAxis className="text-xs" tickFormatter={shortMoney} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {[0,1,2,3,4,5,6].map((i) => <Cell key={i} />)}
@@ -513,6 +520,101 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Top sản phẩm + Top khách hàng cards */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Top sản phẩm theo doanh thu */}
+            <Card>
+              <CardHeader><CardTitle className="text-sm font-medium">Top sản phẩm theo doanh thu</CardTitle></CardHeader>
+              <CardContent>
+                {loading ? <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div> : topSales.length === 0 ? <NoData /> : (
+                  <div className="space-y-0">
+                    {topSales.map((p, i) => (
+                      <div key={p.product_id} className={`flex items-center justify-between px-3 py-2.5 rounded ${i % 2 === 0 ? 'bg-muted/50' : ''}`}>
+                        <div>
+                          <div className="font-medium text-sm">{p.product_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {salesByCategory.find(c => topSales.some(ts => ts.product_id === p.product_id) ) ? '' : ''}
+                            Lợi nhuận: {formatVN(p.profit)} đ
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-sm text-green-600">{formatVN(p.revenue)} đ</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Top khách hàng theo doanh thu */}
+            <Card>
+              <CardHeader><CardTitle className="text-sm font-medium">Top khách hàng theo doanh thu</CardTitle></CardHeader>
+              <CardContent>
+                {loading ? <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div> : topCustomers.length === 0 ? <NoData /> : (
+                  <div className="space-y-0">
+                    {topCustomers.map((c, i) => {
+                      const debt = receivables.find(r => r.customer_id === c.customer_id)
+                      return (
+                        <div key={c.customer_id || c.customer_name} className={`flex items-center justify-between px-3 py-2.5 rounded ${i % 2 === 0 ? 'bg-muted/50' : ''}`}>
+                          <div>
+                            <div className="font-medium text-sm">{c.customer_name}</div>
+                            <div className="text-xs text-muted-foreground">{c.total_orders} đơn hàng</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-sm text-green-600">{formatVN(c.total_revenue)} đ</div>
+                            {debt && Number(debt.total_receivable) > 0 && (
+                              <div className="text-xs text-orange-600">Nợ: {formatVN(debt.total_receivable)} đ</div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Thống kê theo từng sản phẩm */}
+          <Card>
+            <CardHeader><CardTitle className="text-sm font-medium">Thống kê theo từng sản phẩm</CardTitle></CardHeader>
+            <CardContent>
+              {loading ? <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div> : topSales.length === 0 ? <NoData /> : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Sản phẩm</TableHead>
+                      <TableHead className="text-right">SL bán</TableHead>
+                      <TableHead className="text-right">Giá vốn</TableHead>
+                      <TableHead className="text-right">Doanh thu</TableHead>
+                      <TableHead className="text-right">Lợi nhuận</TableHead>
+                      <TableHead className="text-right">Tỷ lệ LN</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {topSales.map((p) => {
+                      const cost = Number(p.revenue) - Number(p.profit)
+                      const marginPct = Number(p.revenue) > 0 ? (Number(p.profit) / Number(p.revenue) * 100).toFixed(1) : '0'
+                      return (
+                        <TableRow key={p.product_id}>
+                          <TableCell className="font-medium">{p.product_name}</TableCell>
+                          <TableCell className="text-right">{formatQty(p.quantity_sold)}</TableCell>
+                          <TableCell className="text-right">{formatVN(cost)} đ</TableCell>
+                          <TableCell className="text-right">{formatVN(p.revenue)} đ</TableCell>
+                          <TableCell className="text-right">
+                            <span className={Number(p.profit) >= 0 ? 'text-green-600' : 'text-destructive'}>{formatVN(p.profit)} đ</span>
+                          </TableCell>
+                          <TableCell className="text-right">{marginPct}%</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ═══════════════ TAB 2: SẢN PHẨM ═══════════════ */}
@@ -549,7 +651,7 @@ export default function DashboardPage() {
                   }} className="h-[300px] w-full">
                     <BarChart data={topSales} layout="vertical" margin={{ top: 5, right: 5, bottom: 5, left: 80 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis type="number" className="text-xs" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <XAxis type="number" className="text-xs" tickFormatter={shortMoney} />
                       <YAxis type="category" dataKey="product_name" className="text-xs" width={75} />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[0, 4, 4, 0]} />
@@ -638,7 +740,7 @@ export default function DashboardPage() {
                   }} className="h-[300px] w-full">
                     <BarChart data={topLoss} layout="vertical" margin={{ top: 5, right: 5, bottom: 5, left: 80 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis type="number" className="text-xs" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <XAxis type="number" className="text-xs" tickFormatter={shortMoney} />
                       <YAxis type="category" dataKey="product_name" className="text-xs" width={75} />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="loss_cost" fill="var(--color-loss_cost)" radius={[0, 4, 4, 0]} />
@@ -719,7 +821,7 @@ export default function DashboardPage() {
                   }} className="h-[300px] w-full">
                     <BarChart data={topCustomers} layout="vertical" margin={{ top: 5, right: 5, bottom: 5, left: 80 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis type="number" className="text-xs" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <XAxis type="number" className="text-xs" tickFormatter={shortMoney} />
                       <YAxis type="category" dataKey="customer_name" className="text-xs" width={75} />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="total_revenue" fill="var(--color-total_revenue)" radius={[0, 4, 4, 0]} />
@@ -763,7 +865,7 @@ export default function DashboardPage() {
                   <AreaChart data={dailyPayments} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tickFormatter={shortDate} className="text-xs" />
-                    <YAxis className="text-xs" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                    <YAxis className="text-xs" tickFormatter={shortMoney} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Area type="monotone" dataKey="cash_in" stroke="var(--color-cash_in)" fill="var(--color-cash_in)" fillOpacity={0.2} strokeWidth={2} />
                     <Area type="monotone" dataKey="cash_out" stroke="var(--color-cash_out)" fill="var(--color-cash_out)" fillOpacity={0.2} strokeWidth={2} />
@@ -889,10 +991,10 @@ export default function DashboardPage() {
               <CardContent>
                 {loading ? <Skeleton className="h-[300px] w-full" /> : dailyStockIn.length === 0 ? <NoData /> : (
                   <ChartContainer config={stockInChartConfig} className="h-[300px] w-full">
-                    <BarChart data={dailyStockIn} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                    <BarChart data={dailyStockIn} margin={{ top: 5, right: 5, bottom: 5, left: 5 }} maxBarSize={50}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tickFormatter={shortDate} className="text-xs" />
-                      <YAxis className="text-xs" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <YAxis className="text-xs" tickFormatter={shortMoney} />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="total_cost" fill="var(--color-total_cost)" radius={[4, 4, 0, 0]} />
                     </BarChart>
@@ -1052,7 +1154,7 @@ export default function DashboardPage() {
                     <LineChart data={dailyExpense} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tickFormatter={shortDate} className="text-xs" />
-                      <YAxis className="text-xs" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <YAxis className="text-xs" tickFormatter={shortMoney} />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Line type="monotone" dataKey="total_amount" stroke="var(--color-total_amount)" strokeWidth={2} dot={{ r: 3 }} />
                     </LineChart>
@@ -1081,7 +1183,7 @@ export default function DashboardPage() {
                   >
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tickFormatter={shortDate} className="text-xs" />
-                    <YAxis className="text-xs" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                    <YAxis className="text-xs" tickFormatter={shortMoney} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Area type="monotone" dataKey="revenue" stroke="var(--color-revenue)" fill="var(--color-revenue)" fillOpacity={0.15} strokeWidth={2} />
                     <Area type="monotone" dataKey="expense" stroke="var(--color-expense)" fill="var(--color-expense)" fillOpacity={0.15} strokeWidth={2} />

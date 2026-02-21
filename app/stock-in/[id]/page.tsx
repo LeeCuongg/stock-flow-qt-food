@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import { ArrowLeft, Pencil, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatVN, formatQty } from '@/lib/utils'
 
 interface StockInDetail {
   id: string
@@ -244,8 +245,8 @@ export default function StockInDetailPage() {
                 <div><span className="text-muted-foreground">Trạng thái:</span>{' '}
                   <Badge variant={detail.status === 'CANCELLED' ? 'destructive' : 'secondary'}>{detail.status}</Badge>
                 </div>
-                <div><span className="text-muted-foreground">Tổng tiền:</span> <span className="font-medium">{Number(detail.total_amount).toLocaleString('vi-VN')} VND</span></div>
-                <div><span className="text-muted-foreground">Đã TT:</span> {Number(detail.amount_paid).toLocaleString('vi-VN')} VND</div>
+                <div><span className="text-muted-foreground">Tổng tiền:</span> <span className="font-medium">{formatVN(detail.total_amount)} VND</span></div>
+                <div><span className="text-muted-foreground">Đã TT:</span> {formatVN(detail.amount_paid)} VND</div>
                 <div><span className="text-muted-foreground">Thanh toán:</span>{' '}
                   {detail.payment_status === 'PAID' ? <Badge className="bg-green-600 text-white">Đã TT</Badge>
                     : detail.payment_status === 'PARTIAL' ? <Badge className="bg-yellow-500 text-white">TT một phần</Badge>
@@ -269,9 +270,9 @@ export default function StockInDetailPage() {
                       <TableCell className="font-medium">{item.products?.name || '-'}</TableCell>
                       <TableCell className="font-mono text-xs">{item.batch_code || '-'}</TableCell>
                       <TableCell className="text-sm">{item.expired_date ? new Date(item.expired_date).toLocaleDateString('vi-VN') : '-'}</TableCell>
-                      <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="text-right font-medium">{Number(item.total_price).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell className="text-right">{formatQty(item.quantity)}</TableCell>
+                      <TableCell className="text-right">{formatVN(item.cost_price)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatVN(item.total_price)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -321,14 +322,14 @@ export default function StockInDetailPage() {
                             {lc.allocation_method === 'BY_VALUE' ? 'Theo giá trị' : 'Theo số lượng'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right font-medium">{Number(lc.amount).toLocaleString('vi-VN')} VND</TableCell>
+                        <TableCell className="text-right font-medium">{formatVN(lc.amount)} VND</TableCell>
                         <TableCell className="text-sm">{new Date(lc.created_at).toLocaleString('vi-VN')}</TableCell>
                       </TableRow>
                     ))}
                     <TableRow>
                       <TableCell colSpan={2} className="font-medium text-right">Tổng Landed Cost:</TableCell>
                       <TableCell className="text-right font-bold">
-                        {landedCosts.reduce((sum, lc) => sum + Number(lc.amount), 0).toLocaleString('vi-VN')} VND
+                        {formatVN(landedCosts.reduce((sum, lc) => sum + Number(lc.amount), 0))} VND
                       </TableCell>
                       <TableCell />
                     </TableRow>

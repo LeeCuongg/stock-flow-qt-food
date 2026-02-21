@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea'
 import { CreditCard, Ban } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatVN, formatQty } from '@/lib/utils'
 
 interface Payment {
   id: string
@@ -256,7 +257,7 @@ export default function PaymentsPage() {
                         <TableCell>{p.customers?.name || p.suppliers?.name || '-'}</TableCell>
                         <TableCell className="font-mono text-xs max-w-[150px] truncate">{batchMap[p.source_id] || '-'}</TableCell>
                         <TableCell className={`text-right font-medium ${p.status === 'VOIDED' ? 'text-muted-foreground' : p.payment_type === 'IN' ? 'text-green-600' : 'text-destructive'}`}>
-                          {p.payment_type === 'IN' ? '+' : '-'}{Number(p.amount).toLocaleString('vi-VN')}
+                          {p.payment_type === 'IN' ? '+' : '-'}{formatVN(p.amount)}
                         </TableCell>
                         <TableCell><Badge variant="outline">{METHOD_LABELS[p.payment_method] || p.payment_method}</Badge></TableCell>
                         <TableCell className="max-w-[150px] truncate text-sm">{p.status === 'VOIDED' ? `[Đã huỷ] ${p.void_reason || ''}` : (p.note || '-')}</TableCell>
@@ -293,7 +294,7 @@ export default function PaymentsPage() {
                 <div><span className="text-muted-foreground">Nguồn:</span><br/>{detailPayment.source_type === 'SALE' ? 'Đơn bán' : 'Phiếu nhập'}</div>
                 <div><span className="text-muted-foreground">Đối tác:</span><br/><span className="font-medium">{detailPayment.customers?.name || detailPayment.suppliers?.name || '-'}</span></div>
                 <div><span className="text-muted-foreground">Phương thức:</span><br/><Badge variant="outline">{METHOD_LABELS[detailPayment.payment_method] || detailPayment.payment_method}</Badge></div>
-                <div className="col-span-2"><span className="text-muted-foreground">Số tiền:</span><br/><span className={`text-lg font-medium ${detailPayment.payment_type === 'IN' ? 'text-green-600' : 'text-destructive'}`}>{detailPayment.payment_type === 'IN' ? '+' : '-'}{Number(detailPayment.amount).toLocaleString('vi-VN')} VND</span></div>
+                <div className="col-span-2"><span className="text-muted-foreground">Số tiền:</span><br/><span className={`text-lg font-medium ${detailPayment.payment_type === 'IN' ? 'text-green-600' : 'text-destructive'}`}>{detailPayment.payment_type === 'IN' ? '+' : '-'}{formatVN(detailPayment.amount)} VND</span></div>
               </div>
               {detailPayment.note && (
                 <div><span className="text-muted-foreground">Ghi chú:</span><br/>{detailPayment.note}</div>
@@ -320,7 +321,7 @@ export default function PaymentsPage() {
                           <TableRow key={i}>
                             <TableCell className="font-medium">{item.products?.name || '-'}</TableCell>
                             <TableCell className="font-mono text-xs">{item.batch_code || '-'}</TableCell>
-                            <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
+                            <TableCell className="text-right">{formatQty(item.quantity)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -354,7 +355,7 @@ export default function PaymentsPage() {
             <DialogTitle>Xác nhận huỷ thanh toán</DialogTitle>
             <DialogDescription>
               Huỷ khoản {detailPayment?.payment_type === 'IN' ? 'thu' : 'chi'}{' '}
-              {Number(detailPayment?.amount || 0).toLocaleString('vi-VN')} VND.
+              {formatVN(detailPayment?.amount || 0)} VND.
               Số tiền sẽ được trừ khỏi phiếu gốc.
             </DialogDescription>
           </DialogHeader>

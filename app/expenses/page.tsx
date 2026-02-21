@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Receipt, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { formatVN } from '@/lib/utils'
 
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Tiền mặt' },
@@ -245,7 +246,7 @@ export default function ExpensesPage() {
                           : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell className="text-right font-medium text-destructive">
-                        {Number(r.amount).toLocaleString('vi-VN')}
+                        {formatVN(r.amount)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
@@ -264,7 +265,7 @@ export default function ExpensesPage() {
                 </TableBody>
               </Table>
               <div className="mt-3 flex justify-end text-sm border-t pt-3">
-                <span>Tổng chi phí: <span className="font-bold text-destructive">{totalAmount.toLocaleString('vi-VN')} VND</span></span>
+                <span>Tổng chi phí: <span className="font-bold text-destructive">{formatVN(totalAmount)} VND</span></span>
               </div>
             </>
           )}

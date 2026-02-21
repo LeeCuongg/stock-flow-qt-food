@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Search, Warehouse, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatQty } from '@/lib/utils'
 
 interface InventoryBatch {
   id: string
@@ -139,7 +140,7 @@ export default function InventoryPage() {
                       <TableCell className="font-medium">{product?.name || '-'}</TableCell>
                       <TableCell className="font-mono text-xs">{product?.sku || '-'}</TableCell>
                       <TableCell className="text-right">
-                        {Number(batch.quantity_remaining || batch.quantity).toLocaleString('vi-VN')}{' '}
+                        {formatQty(batch.quantity_remaining || batch.quantity)}{' '}
                         <Badge variant="secondary" className="ml-1">{product?.unit || '-'}</Badge>
                       </TableCell>
                       <TableCell>

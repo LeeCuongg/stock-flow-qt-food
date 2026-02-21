@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft, Pencil, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { formatVN, formatQty } from '@/lib/utils'
 
 interface SaleDetail {
   id: string
@@ -190,14 +191,14 @@ export default function SaleDetailPage() {
                 <div><span className="text-muted-foreground">Trạng thái:</span>{' '}
                   <Badge variant={detail.status === 'CANCELLED' ? 'destructive' : 'secondary'}>{detail.status}</Badge>
                 </div>
-                <div><span className="text-muted-foreground">Doanh thu:</span> <span className="font-medium">{Number(detail.total_revenue).toLocaleString('vi-VN')} VND</span></div>
-                <div><span className="text-muted-foreground">Giá vốn:</span> {Number(detail.total_cost_estimated).toLocaleString('vi-VN')} VND</div>
+                <div><span className="text-muted-foreground">Doanh thu:</span> <span className="font-medium">{formatVN(detail.total_revenue)} VND</span></div>
+                <div><span className="text-muted-foreground">Giá vốn:</span> {formatVN(detail.total_cost_estimated)} VND</div>
                 <div><span className="text-muted-foreground">Lợi nhuận:</span>{' '}
                   <span className={Number(detail.profit) >= 0 ? 'font-medium text-green-600' : 'font-medium text-destructive'}>
-                    {Number(detail.profit).toLocaleString('vi-VN')} VND
+                    {formatVN(detail.profit)} VND
                   </span>
                 </div>
-                <div><span className="text-muted-foreground">Đã TT:</span> {Number(detail.amount_paid).toLocaleString('vi-VN')} VND</div>
+                <div><span className="text-muted-foreground">Đã TT:</span> {formatVN(detail.amount_paid)} VND</div>
                 <div><span className="text-muted-foreground">Thanh toán:</span>{' '}
                   {detail.payment_status === 'PAID' ? <Badge className="bg-green-600 text-white">Đã TT</Badge>
                     : detail.payment_status === 'PARTIAL' ? <Badge className="bg-yellow-500 text-white">TT một phần</Badge>
@@ -206,12 +207,12 @@ export default function SaleDetailPage() {
                 {(totalExtraCharge > 0 || totalDiscount > 0) && (
                   <>
                     {totalExtraCharge > 0 && (
-                      <div><span className="text-muted-foreground">Phụ thu:</span> <span className="font-medium text-orange-600">+{totalExtraCharge.toLocaleString('vi-VN')} VND</span></div>
+                      <div><span className="text-muted-foreground">Phụ thu:</span> <span className="font-medium text-orange-600">+{formatVN(totalExtraCharge)} VND</span></div>
                     )}
                     {totalDiscount > 0 && (
-                      <div><span className="text-muted-foreground">Giảm giá:</span> <span className="font-medium text-green-600">-{totalDiscount.toLocaleString('vi-VN')} VND</span></div>
+                      <div><span className="text-muted-foreground">Giảm giá:</span> <span className="font-medium text-green-600">-{formatVN(totalDiscount)} VND</span></div>
                     )}
-                    <div><span className="text-muted-foreground">Tổng sau điều chỉnh:</span> <span className="font-bold">{adjustedTotal.toLocaleString('vi-VN')} VND</span></div>
+                    <div><span className="text-muted-foreground">Tổng sau điều chỉnh:</span> <span className="font-bold">{formatVN(adjustedTotal)} VND</span></div>
                   </>
                 )}
               </div>
@@ -231,10 +232,10 @@ export default function SaleDetailPage() {
                     <TableRow key={i}>
                       <TableCell className="font-medium">{item.products?.name || '-'} <span className="text-xs text-muted-foreground">({item.products?.unit})</span></TableCell>
                       <TableCell className="font-mono text-xs">{item.inventory_batches?.batch_code || '-'}</TableCell>
-                      <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="text-right">{Number(item.sale_price).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="text-right font-medium">{Number(item.total_price).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell className="text-right">{formatQty(item.quantity)}</TableCell>
+                      <TableCell className="text-right">{formatVN(item.sale_price)}</TableCell>
+                      <TableCell className="text-right">{formatVN(item.cost_price)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatVN(item.total_price)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -280,7 +281,7 @@ export default function SaleDetailPage() {
                               : <Badge className="bg-green-600 text-white">Giảm giá</Badge>}
                           </TableCell>
                           <TableCell className={`text-right font-medium ${adj.adjustment_type === 'EXTRA_CHARGE' ? 'text-orange-600' : 'text-green-600'}`}>
-                            {adj.adjustment_type === 'EXTRA_CHARGE' ? '+' : '-'}{Number(adj.amount).toLocaleString('vi-VN')}
+                            {adj.adjustment_type === 'EXTRA_CHARGE' ? '+' : '-'}{formatVN(adj.amount)}
                           </TableCell>
                           <TableCell className="text-sm">{adj.note || '-'}</TableCell>
                           <TableCell>
@@ -295,9 +296,9 @@ export default function SaleDetailPage() {
                     </TableBody>
                   </Table>
                   <div className="mt-4 flex justify-end gap-6 text-sm border-t pt-3">
-                    <div>Phụ thu: <span className="font-medium text-orange-600">+{totalExtraCharge.toLocaleString('vi-VN')}</span></div>
-                    <div>Giảm giá: <span className="font-medium text-green-600">-{totalDiscount.toLocaleString('vi-VN')}</span></div>
-                    <div>Tổng sau điều chỉnh: <span className="font-bold">{adjustedTotal.toLocaleString('vi-VN')} VND</span></div>
+                    <div>Phụ thu: <span className="font-medium text-orange-600">+{formatVN(totalExtraCharge)}</span></div>
+                    <div>Giảm giá: <span className="font-medium text-green-600">-{formatVN(totalDiscount)}</span></div>
+                    <div>Tổng sau điều chỉnh: <span className="font-bold">{formatVN(adjustedTotal)} VND</span></div>
                   </div>
                 </>
               )}

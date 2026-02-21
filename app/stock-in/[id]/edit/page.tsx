@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { formatVN, formatQty } from '@/lib/utils'
 
 interface Supplier { id: string; name: string }
 interface Product { id: string; name: string; sku: string | null; unit: string; default_cost_price: number }
@@ -306,14 +307,14 @@ export default function StockInEditPage() {
                 </div>
               </div>
               <div className="text-right text-sm text-muted-foreground">
-                Thành tiền: <span className="font-medium text-foreground">{(item.quantity * item.cost_price).toLocaleString('vi-VN')} VND</span>
+                Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.cost_price)} VND</span>
               </div>
             </div>
           ))}
 
           {items.length > 0 && (
             <div className="flex justify-end pt-2 border-t">
-              <div className="text-sm font-medium">Tiền hàng: <span className="text-lg">{totalCost.toLocaleString('vi-VN')}</span> VND</div>
+              <div className="text-sm font-medium">Tiền hàng: <span className="text-lg">{formatVN(totalCost)}</span> VND</div>
             </div>
           )}
         </CardContent>
@@ -346,12 +347,12 @@ export default function StockInEditPage() {
                       {lc.allocation_method === 'BY_VALUE' ? 'Theo giá trị' : 'Theo SL'}
                     </Badge>
                   </div>
-                  <span className="text-sm font-medium">{Number(lc.amount).toLocaleString('vi-VN')} VND</span>
+                  <span className="text-sm font-medium">{formatVN(lc.amount)} VND</span>
                 </div>
               ))}
               {landedCosts.length > 0 && (
                 <div className="text-right text-xs text-muted-foreground">
-                  Tổng đã phân bổ: {existingLandedTotal.toLocaleString('vi-VN')} VND
+                  Tổng đã phân bổ: {formatVN(existingLandedTotal)} VND
                 </div>
               )}
             </div>
@@ -383,7 +384,7 @@ export default function StockInEditPage() {
 
           {newLandedTotal > 0 && (
             <div className="text-right text-xs text-muted-foreground">
-              Chi phí mới: {newLandedTotal.toLocaleString('vi-VN')} VND
+              Chi phí mới: {formatVN(newLandedTotal)} VND
             </div>
           )}
 
@@ -393,7 +394,7 @@ export default function StockInEditPage() {
 
           {(existingLandedTotal + newLandedTotal) > 0 && (
             <div className="flex justify-end pt-2 border-t">
-              <div className="text-sm font-medium">Tổng cộng: <span className="text-lg">{grandTotal.toLocaleString('vi-VN')}</span> VND</div>
+              <div className="text-sm font-medium">Tổng cộng: <span className="text-lg">{formatVN(grandTotal)}</span> VND</div>
             </div>
           )}
         </CardContent>

@@ -16,6 +16,7 @@ import { Plus, Trash2, Search, UserCheck, CreditCard } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { formatVN, formatQty } from '@/lib/utils'
 
 interface Customer { id: string; name: string; phone: string | null; address: string | null; note: string | null; created_at: string }
 interface UnpaidSale { id: string; created_at: string; total_revenue: number; amount_paid: number; customer_name: string | null }
@@ -158,9 +159,9 @@ export default function CustomersPage() {
       })
       if (error) throw error
       const result = data as { total_allocated: number; invoices_paid: number; remaining: number }
-      toast.success(`Đã phân bổ ${Number(result.total_allocated).toLocaleString('vi-VN')} VND vào ${result.invoices_paid} phiếu`)
+      toast.success(`Đã phân bổ ${formatVN(result.total_allocated)} VND vào ${result.invoices_paid} phiếu`)
       if (result.remaining > 0) {
-        toast.info(`Còn dư ${Number(result.remaining).toLocaleString('vi-VN')} VND chưa phân bổ`)
+        toast.info(`Còn dư ${formatVN(result.remaining)} VND chưa phân bổ`)
       }
       setPayOpen(false)
       loadDebts()
@@ -219,7 +220,7 @@ export default function CustomersPage() {
                       <TableCell>{c.phone || '-'}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{c.address || '-'}</TableCell>
                       <TableCell className="text-right">
-                        {debt > 0 ? <span className="font-medium text-orange-600">{Number(debt).toLocaleString('vi-VN')}</span> : <span className="text-muted-foreground">0</span>}
+                        {debt > 0 ? <span className="font-medium text-orange-600">{formatVN(debt)}</span> : <span className="text-muted-foreground">0</span>}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
@@ -246,7 +247,7 @@ export default function CustomersPage() {
           <DialogHeader>
             <DialogTitle>Thu tiền — {payCustomer?.name}</DialogTitle>
             <DialogDescription>
-              Tổng nợ: <span className="font-medium text-orange-600">{Number(totalUnpaidDebt).toLocaleString('vi-VN')} VND</span> — Nhập số tiền khách trả, hệ thống tự phân bổ vào các phiếu (cũ trước)
+              Tổng nợ: <span className="font-medium text-orange-600">{formatVN(totalUnpaidDebt)} VND</span> — Nhập số tiền khách trả, hệ thống tự phân bổ vào các phiếu (cũ trước)
             </DialogDescription>
           </DialogHeader>
           {payLoading ? (
@@ -269,9 +270,9 @@ export default function CustomersPage() {
                       {unpaidSales.map((s) => (
                         <TableRow key={s.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openSaleDetail(s.id)}>
                           <TableCell className="text-sm">{new Date(s.created_at).toLocaleDateString('vi-VN')}</TableCell>
-                          <TableCell className="text-right">{Number(s.total_revenue).toLocaleString('vi-VN')}</TableCell>
-                          <TableCell className="text-right">{Number(s.amount_paid).toLocaleString('vi-VN')}</TableCell>
-                          <TableCell className="text-right font-medium text-orange-600">{Number(s.total_revenue - s.amount_paid).toLocaleString('vi-VN')}</TableCell>
+                          <TableCell className="text-right">{formatVN(s.total_revenue)}</TableCell>
+                          <TableCell className="text-right">{formatVN(s.amount_paid)}</TableCell>
+                          <TableCell className="text-right font-medium text-orange-600">{formatVN(s.total_revenue - s.amount_paid)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -296,7 +297,7 @@ export default function CustomersPage() {
                         setDebtRemaining(v)
                         setPayAmount(Math.max(0, totalUnpaidDebt - v))
                       }} />
-                      <p className="text-sm text-muted-foreground">→ Khách trả: <span className="font-medium text-foreground">{Number(Math.max(0, totalUnpaidDebt - debtRemaining)).toLocaleString('vi-VN')} VND</span></p>
+                      <p className="text-sm text-muted-foreground">→ Khách trả: <span className="font-medium text-foreground">{formatVN(Math.max(0, totalUnpaidDebt - debtRemaining))} VND</span></p>
                     </>
                   )}
                   <div className="flex gap-2">
@@ -332,8 +333,8 @@ export default function CustomersPage() {
                       rem -= alloc
                       return (
                         <div key={s.id} className="flex justify-between">
-                          <span className="text-muted-foreground">{new Date(s.created_at).toLocaleDateString('vi-VN')} (nợ {Number(debt).toLocaleString('vi-VN')})</span>
-                          <span className="font-medium text-green-600">→ {Number(alloc).toLocaleString('vi-VN')}{alloc >= debt ? <Badge className="ml-1 bg-green-600 text-white text-[10px] px-1">Tất toán</Badge> : ''}</span>
+                          <span className="text-muted-foreground">{new Date(s.created_at).toLocaleDateString('vi-VN')} (nợ {formatVN(debt)})</span>
+                          <span className="font-medium text-green-600">→ {formatVN(alloc)}{alloc >= debt ? <Badge className="ml-1 bg-green-600 text-white text-[10px] px-1">Tất toán</Badge> : ''}</span>
                         </div>
                       )
                     })
@@ -341,7 +342,7 @@ export default function CustomersPage() {
                   {payAmount > totalUnpaidDebt && (
                     <div className="flex justify-between text-orange-600 pt-1 border-t">
                       <span>Dư:</span>
-                      <span className="font-medium">{Number(payAmount - totalUnpaidDebt).toLocaleString('vi-VN')} VND</span>
+                      <span className="font-medium">{formatVN(payAmount - totalUnpaidDebt)} VND</span>
                     </div>
                   )}
                 </div>
@@ -364,7 +365,7 @@ export default function CustomersPage() {
             <DialogTitle>Chi tiết phiếu xuất</DialogTitle>
             {saleDetail && (
               <DialogDescription>
-                Ngày: {new Date(saleDetail.created_at).toLocaleString('vi-VN')} — Tổng: {Number(saleDetail.total_revenue).toLocaleString('vi-VN')} VND
+                Ngày: {new Date(saleDetail.created_at).toLocaleString('vi-VN')} — Tổng: {formatVN(saleDetail.total_revenue)} VND
               </DialogDescription>
             )}
           </DialogHeader>
@@ -373,8 +374,8 @@ export default function CustomersPage() {
           ) : saleDetail ? (
             <div className="space-y-3">
               <div className="flex gap-4 text-sm">
-                <div><span className="text-muted-foreground">Đã TT:</span> {Number(saleDetail.amount_paid).toLocaleString('vi-VN')}</div>
-                <div><span className="text-muted-foreground">Còn nợ:</span> <span className="font-medium text-orange-600">{Number(saleDetail.total_revenue - saleDetail.amount_paid).toLocaleString('vi-VN')}</span></div>
+                <div><span className="text-muted-foreground">Đã TT:</span> {formatVN(saleDetail.amount_paid)}</div>
+                <div><span className="text-muted-foreground">Còn nợ:</span> <span className="font-medium text-orange-600">{formatVN(saleDetail.total_revenue - saleDetail.amount_paid)}</span></div>
                 {saleDetail.note && <div><span className="text-muted-foreground">Ghi chú:</span> {saleDetail.note}</div>}
               </div>
               <div className="border rounded-lg overflow-hidden">
@@ -395,10 +396,10 @@ export default function CustomersPage() {
                       <TableRow key={i}>
                         <TableCell className="font-medium">{item.products?.name || '-'} <span className="text-xs text-muted-foreground">({item.products?.unit})</span></TableCell>
                         <TableCell className="font-mono text-xs">{item.inventory_batches?.batch_code || '-'}</TableCell>
-                        <TableCell className="text-right">{Number(item.quantity).toLocaleString('vi-VN')}</TableCell>
-                        <TableCell className="text-right">{Number(item.cost_price).toLocaleString('vi-VN')}</TableCell>
-                        <TableCell className="text-right">{Number(item.sale_price).toLocaleString('vi-VN')}</TableCell>
-                        <TableCell className="text-right font-medium">{Number(item.total_price).toLocaleString('vi-VN')}</TableCell>
+                        <TableCell className="text-right">{formatQty(item.quantity)}</TableCell>
+                        <TableCell className="text-right">{formatVN(item.cost_price)}</TableCell>
+                        <TableCell className="text-right">{formatVN(item.sale_price)}</TableCell>
+                        <TableCell className="text-right font-medium">{formatVN(item.total_price)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

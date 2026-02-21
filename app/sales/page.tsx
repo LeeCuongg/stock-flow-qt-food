@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { ViewSaleDetails } from '@/components/view-sale-details'
+import { formatVN, formatQty } from '@/lib/utils'
 
 interface Customer { id: string; name: string }
 
@@ -584,10 +585,10 @@ export default function SalesPage() {
                     <TableCell>{new Date(r.created_at).toLocaleDateString('vi-VN')}</TableCell>
                     <TableCell>{r.customer_name || '-'}</TableCell>
                     <TableCell className="text-right font-medium">
-                      {Number(r.total_revenue).toLocaleString('vi-VN')}
+                      {formatVN(r.total_revenue)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {Number(r.amount_paid).toLocaleString('vi-VN')}
+                      {formatVN(r.amount_paid)}
                     </TableCell>
                     <TableCell>{paymentStatusBadge(r.payment_status)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">{r.note || '-'}</TableCell>
@@ -750,7 +751,7 @@ export default function SalesPage() {
                         <div className="flex items-center gap-3">
                           <Badge variant="outline" className="font-mono text-xs">{batch.batch_code || '-'}</Badge>
                           <span className="text-sm">
-                            Tồn: <span className="font-medium">{Number(batch.quantity_remaining).toLocaleString('vi-VN')}</span>
+                            Tồn: <span className="font-medium">{formatQty(batch.quantity_remaining)}</span>
                           </span>
                           {batch.expiry_date && (
                             <span className="text-xs text-muted-foreground">
@@ -789,7 +790,7 @@ export default function SalesPage() {
                       {item.expiry_date && (
                         <span>• HSD: {new Date(item.expiry_date).toLocaleDateString('vi-VN')}</span>
                       )}
-                      <span>• Giá vốn: {item.batch_cost_price.toLocaleString('vi-VN')}</span>
+                      <span>• Giá vốn: {formatVN(item.batch_cost_price)}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="grid gap-1">
@@ -805,7 +806,7 @@ export default function SalesPage() {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">
-                        Thành tiền: <span className="font-medium text-foreground">{(item.quantity * item.sale_price).toLocaleString('vi-VN')}</span>
+                        Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.sale_price)}</span>
                       </span>
                       <span className="text-muted-foreground">
                         Lãi: <span className={
@@ -813,7 +814,7 @@ export default function SalesPage() {
                             ? 'font-medium text-green-600'
                             : 'font-medium text-destructive'
                         }>
-                          {(item.quantity * item.sale_price - item.quantity * item.batch_cost_price).toLocaleString('vi-VN')}
+                          {formatVN(item.quantity * item.sale_price - item.quantity * item.batch_cost_price)}
                         </span>
                       </span>
                     </div>
@@ -824,34 +825,34 @@ export default function SalesPage() {
                 <div className="border-t pt-3 space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Tổng doanh thu:</span>
-                    <span className="font-medium">{totalRevenue.toLocaleString('vi-VN')} VND</span>
+                    <span className="font-medium">{formatVN(totalRevenue)} VND</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Tổng giá vốn:</span>
-                    <span className="font-medium">{totalCost.toLocaleString('vi-VN')} VND</span>
+                    <span className="font-medium">{formatVN(totalCost)} VND</span>
                   </div>
                   {totalExtraCharge > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Phụ thu:</span>
-                      <span className="font-medium text-orange-600">+{totalExtraCharge.toLocaleString('vi-VN')} VND</span>
+                      <span className="font-medium text-orange-600">+{formatVN(totalExtraCharge)} VND</span>
                     </div>
                   )}
                   {totalDiscount > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Giảm giá:</span>
-                      <span className="font-medium text-green-600">-{totalDiscount.toLocaleString('vi-VN')} VND</span>
+                      <span className="font-medium text-green-600">-{formatVN(totalDiscount)} VND</span>
                     </div>
                   )}
                   {(totalExtraCharge > 0 || totalDiscount > 0) && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tổng sau điều chỉnh:</span>
-                      <span className="font-bold">{adjustedRevenue.toLocaleString('vi-VN')} VND</span>
+                      <span className="font-bold">{formatVN(adjustedRevenue)} VND</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm font-medium">
                     <span>Lợi nhuận:</span>
                     <span className={totalProfit >= 0 ? 'text-green-600' : 'text-destructive'}>
-                      {totalProfit.toLocaleString('vi-VN')} VND
+                      {formatVN(totalProfit)} VND
                     </span>
                   </div>
                 </div>
@@ -900,7 +901,7 @@ export default function SalesPage() {
           <DialogHeader>
             <DialogTitle>Thanh toán đơn bán</DialogTitle>
             <DialogDescription>
-              Tổng: {Number(payingSale?.total_revenue || 0).toLocaleString('vi-VN')} — Đã TT: {Number(payingSale?.amount_paid || 0).toLocaleString('vi-VN')} — Còn lại: {Number((payingSale?.total_revenue || 0) - (payingSale?.amount_paid || 0)).toLocaleString('vi-VN')} VND
+              Tổng: {formatVN(payingSale?.total_revenue || 0)} — Đã TT: {formatVN(payingSale?.amount_paid || 0)} — Còn lại: {formatVN((payingSale?.total_revenue || 0) - (payingSale?.amount_paid || 0))} VND
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">

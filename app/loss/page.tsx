@@ -19,6 +19,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Plus, AlertTriangle, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatVN, formatQty } from '@/lib/utils'
 
 const LOSS_REASONS = [
   { value: 'EXPIRED', label: 'Hết hạn' },
@@ -320,13 +321,13 @@ export default function LossPage() {
                         ? new Date(r.inventory_batches.expiry_date).toLocaleDateString('vi-VN')
                         : '-'}
                     </TableCell>
-                    <TableCell className="text-right">{Number(r.quantity).toLocaleString('vi-VN')}</TableCell>
+                    <TableCell className="text-right">{formatQty(r.quantity)}</TableCell>
                     <TableCell>
                       <Badge variant={reasonBadgeVariant(r.reason)}>{reasonLabel(r.reason)}</Badge>
                     </TableCell>
-                    <TableCell className="text-right">{Number(r.cost_price).toLocaleString('vi-VN')}</TableCell>
+                    <TableCell className="text-right">{formatVN(r.cost_price)}</TableCell>
                     <TableCell className="text-right font-medium text-destructive">
-                      {Number(r.total_loss_cost).toLocaleString('vi-VN')}
+                      {formatVN(r.total_loss_cost)}
                     </TableCell>
                     <TableCell>
                       {r.status === 'CANCELLED'
@@ -357,10 +358,10 @@ export default function LossPage() {
                 <div><span className="text-muted-foreground">Đơn vị:</span><br/>{detailRecord.products?.unit || '-'}</div>
                 <div><span className="text-muted-foreground">Mã lô:</span><br/><span className="font-mono">{detailRecord.inventory_batches?.batch_code || '-'}</span></div>
                 <div><span className="text-muted-foreground">HSD:</span><br/>{detailRecord.inventory_batches?.expiry_date ? new Date(detailRecord.inventory_batches.expiry_date).toLocaleDateString('vi-VN') : '-'}</div>
-                <div><span className="text-muted-foreground">Số lượng:</span><br/><span className="font-medium">{Number(detailRecord.quantity).toLocaleString('vi-VN')}</span></div>
+                <div><span className="text-muted-foreground">Số lượng:</span><br/><span className="font-medium">{formatQty(detailRecord.quantity)}</span></div>
                 <div><span className="text-muted-foreground">Lý do:</span><br/><Badge variant={reasonBadgeVariant(detailRecord.reason)}>{reasonLabel(detailRecord.reason)}</Badge></div>
-                <div><span className="text-muted-foreground">Giá vốn:</span><br/>{Number(detailRecord.cost_price).toLocaleString('vi-VN')} VND</div>
-                <div><span className="text-muted-foreground">Tiền hao hụt:</span><br/><span className="font-medium text-destructive">{Number(detailRecord.total_loss_cost).toLocaleString('vi-VN')} VND</span></div>
+                <div><span className="text-muted-foreground">Giá vốn:</span><br/>{formatVN(detailRecord.cost_price)} VND</div>
+                <div><span className="text-muted-foreground">Tiền hao hụt:</span><br/><span className="font-medium text-destructive">{formatVN(detailRecord.total_loss_cost)} VND</span></div>
                 <div><span className="text-muted-foreground">Trạng thái:</span><br/>
                   {detailRecord.status === 'CANCELLED'
                     ? <Badge variant="destructive">Đã huỷ</Badge>
@@ -399,11 +400,11 @@ export default function LossPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Số lượng hoàn trả:</span>
-                <span className="font-medium">{Number(cancelRecord.quantity).toLocaleString('vi-VN')}</span>
+                <span className="font-medium">{formatQty(cancelRecord.quantity)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Tiền hao hụt:</span>
-                <span className="font-medium text-destructive">{Number(cancelRecord.total_loss_cost).toLocaleString('vi-VN')} VND</span>
+                <span className="font-medium text-destructive">{formatVN(cancelRecord.total_loss_cost)} VND</span>
               </div>
             </div>
           )}
@@ -470,7 +471,7 @@ export default function LossPage() {
                     <SelectContent>
                       {batchesForProduct(selectedProductId).map((b) => (
                         <SelectItem key={b.id} value={b.id}>
-                          {b.batch_code || '-'} — Tồn: {Number(b.quantity_remaining).toLocaleString('vi-VN')}
+                          {b.batch_code || '-'} — Tồn: {formatQty(b.quantity_remaining)}
                           {b.expiry_date ? ` — HSD: ${new Date(b.expiry_date).toLocaleDateString('vi-VN')}` : ''}
                         </SelectItem>
                       ))}
@@ -485,11 +486,11 @@ export default function LossPage() {
               <div className="rounded-md border p-3 text-sm space-y-1 bg-muted/30">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Tồn kho:</span>
-                  <span className="font-medium">{Number(selectedBatch.quantity_remaining).toLocaleString('vi-VN')}</span>
+                  <span className="font-medium">{formatQty(selectedBatch.quantity_remaining)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Giá vốn:</span>
-                  <span className="font-medium">{Number(selectedBatch.cost_price).toLocaleString('vi-VN')} VND</span>
+                  <span className="font-medium">{formatVN(selectedBatch.cost_price)} VND</span>
                 </div>
                 {selectedBatch.expiry_date && (
                   <div className="flex justify-between">
@@ -532,8 +533,8 @@ export default function LossPage() {
                     value={remainingQty} onChange={(e) => setRemainingQty(Number(e.target.value))} />
                   {selectedBatch && remainingQty >= 0 && remainingQty < selectedBatch.quantity_remaining && (
                     <p className="text-sm text-muted-foreground">
-                      → Hao hụt: <span className="font-medium text-destructive">{(selectedBatch.quantity_remaining - remainingQty).toLocaleString('vi-VN')}</span>
-                      {' '}(Tồn hệ thống: {Number(selectedBatch.quantity_remaining).toLocaleString('vi-VN')} − Thực tế: {remainingQty.toLocaleString('vi-VN')})
+                      → Hao hụt: <span className="font-medium text-destructive">{formatQty(selectedBatch.quantity_remaining - remainingQty)}</span>
+                      {' '}(Tồn hệ thống: {formatQty(selectedBatch.quantity_remaining)} − Thực tế: {formatQty(remainingQty)})
                     </p>
                   )}
                 </div>
@@ -564,7 +565,7 @@ export default function LossPage() {
               <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
                 <div className="flex justify-between text-sm font-medium">
                   <span>Tiền hao hụt:</span>
-                  <span className="text-destructive text-lg">{lossCost.toLocaleString('vi-VN')} VND</span>
+                  <span className="text-destructive text-lg">{formatVN(lossCost)} VND</span>
                 </div>
               </div>
             )}

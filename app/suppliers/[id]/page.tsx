@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ArrowLeft, Pencil, Phone, MapPin, FileText, Package, Check, X, Truck } from 'lucide-react'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { formatVN, formatQty } from '@/lib/utils'
 
 interface Supplier {
   id: string; name: string; phone: string | null; address: string | null; note: string | null; created_at: string
@@ -168,7 +169,7 @@ export default function SupplierDetailPage() {
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">Công nợ:</span>
               {debt > 0 ? (
-                <span className="font-medium text-red-600">{Number(debt).toLocaleString('vi-VN')} VND</span>
+                <span className="font-medium text-red-600">{formatVN(debt)} VND</span>
               ) : (
                 <span className="text-muted-foreground">0</span>
               )}
@@ -232,7 +233,7 @@ export default function SupplierDetailPage() {
                           }}
                         />
                       ) : (
-                        <span className="font-medium">{Number(p.cost_price).toLocaleString('vi-VN')}</span>
+                        <span className="font-medium">{formatVN(p.cost_price)}</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground text-sm">

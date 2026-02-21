@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { ViewStockInDetails } from '@/components/view-stock-in-details'
+import { formatVN, formatQty } from '@/lib/utils'
 
 interface Supplier { id: string; name: string }
 
@@ -554,10 +555,10 @@ export default function StockInPage() {
                     <TableCell>{new Date(r.created_at).toLocaleDateString('vi-VN')}</TableCell>
                     <TableCell>{r.supplier_name || '-'}</TableCell>
                     <TableCell className="text-right font-medium">
-                      {Number(r.total_amount).toLocaleString('vi-VN')}
+                      {formatVN(r.total_amount)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {Number(r.amount_paid).toLocaleString('vi-VN')}
+                      {formatVN(r.amount_paid)}
                     </TableCell>
                     <TableCell>
                       {r.payment_status === 'PAID' ? <Badge className="bg-green-600 text-white hover:bg-green-700">Đã TT</Badge>
@@ -752,13 +753,13 @@ export default function StockInPage() {
                       </div>
                     </div>
                     <div className="text-right text-sm text-muted-foreground">
-                      Thành tiền: <span className="font-medium text-foreground">{(item.quantity * item.cost_price).toLocaleString('vi-VN')} VND</span>
+                      Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.cost_price)} VND</span>
                     </div>
                   </div>
                 ))}
                 <div className="flex justify-end pt-2 border-t">
                   <div className="text-sm font-medium">
-                    Tiền hàng: <span className="text-lg">{totalCost.toLocaleString('vi-VN')}</span> VND
+                    Tiền hàng: <span className="text-lg">{formatVN(totalCost)}</span> VND
                   </div>
                 </div>
               </div>
@@ -801,13 +802,13 @@ export default function StockInPage() {
                 )}
                 {totalLandedCost > 0 && (
                   <div className="text-right text-sm text-muted-foreground pt-1">
-                    Tổng chi phí: <span className="font-medium text-foreground">{totalLandedCost.toLocaleString('vi-VN')} VND</span>
+                    Tổng chi phí: <span className="font-medium text-foreground">{formatVN(totalLandedCost)} VND</span>
                   </div>
                 )}
                 {items.length > 0 && (totalLandedCost > 0 || landedCostEntries.length > 0) && (
                   <div className="flex justify-end pt-2 border-t">
                     <div className="text-sm font-medium">
-                      Tổng cộng: <span className="text-lg">{grandTotal.toLocaleString('vi-VN')}</span> VND
+                      Tổng cộng: <span className="text-lg">{formatVN(grandTotal)}</span> VND
                     </div>
                   </div>
                 )}
@@ -830,7 +831,7 @@ export default function StockInPage() {
           <DialogHeader>
             <DialogTitle>Chi tiền phiếu nhập</DialogTitle>
             <DialogDescription>
-              Tổng: {Number(payingRecord?.total_amount || 0).toLocaleString('vi-VN')} — Đã TT: {Number(payingRecord?.amount_paid || 0).toLocaleString('vi-VN')} — Còn lại: {Number((payingRecord?.total_amount || 0) - (payingRecord?.amount_paid || 0)).toLocaleString('vi-VN')} VND
+              Tổng: {formatVN(payingRecord?.total_amount || 0)} — Đã TT: {formatVN(payingRecord?.amount_paid || 0)} — Còn lại: {formatVN((payingRecord?.total_amount || 0) - (payingRecord?.amount_paid || 0))} VND
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">

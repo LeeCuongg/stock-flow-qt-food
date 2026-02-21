@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { formatVN, formatQty } from '@/lib/utils'
 
 interface Customer { id: string; name: string }
 interface Product { id: string; name: string; sku: string | null; unit: string; default_sale_price: number }
@@ -278,7 +279,7 @@ export default function SaleEditPage() {
                   >
                     <div className="flex items-center gap-3">
                       <Badge variant="outline" className="font-mono text-xs">{batch.batch_code || '-'}</Badge>
-                      <span className="text-sm">Tồn: <span className="font-medium">{Number(batch.quantity_remaining).toLocaleString('vi-VN')}</span></span>
+                      <span className="text-sm">Tồn: <span className="font-medium">{formatQty(batch.quantity_remaining)}</span></span>
                       {batch.expiry_date && <span className="text-xs text-muted-foreground">HSD: {new Date(batch.expiry_date).toLocaleDateString('vi-VN')}</span>}
                     </div>
                     <Button variant="ghost" size="sm" type="button"><Plus className="h-4 w-4" /></Button>
@@ -305,7 +306,7 @@ export default function SaleEditPage() {
                 <span>Tồn hiện tại: {item.batch_remaining}</span>
                 <span>• SL cũ: {item.old_qty}</span>
                 <span>• Max: {maxQty(item)}</span>
-                <span>• Giá vốn: {item.batch_cost_price.toLocaleString('vi-VN')}</span>
+                <span>• Giá vốn: {formatVN(item.batch_cost_price)}</span>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1">
@@ -320,11 +321,11 @@ export default function SaleEditPage() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  Thành tiền: <span className="font-medium text-foreground">{(item.quantity * item.sale_price).toLocaleString('vi-VN')}</span>
+                  Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.sale_price)}</span>
                 </span>
                 <span className="text-muted-foreground">
                   Lãi: <span className={(item.quantity * item.sale_price - item.quantity * item.batch_cost_price) >= 0 ? 'font-medium text-green-600' : 'font-medium text-destructive'}>
-                    {(item.quantity * item.sale_price - item.quantity * item.batch_cost_price).toLocaleString('vi-VN')}
+                    {formatVN(item.quantity * item.sale_price - item.quantity * item.batch_cost_price)}
                   </span>
                 </span>
               </div>
@@ -335,34 +336,34 @@ export default function SaleEditPage() {
             <div className="border-t pt-3 space-y-1">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Tổng doanh thu:</span>
-                <span className="font-medium">{totalRevenue.toLocaleString('vi-VN')} VND</span>
+                <span className="font-medium">{formatVN(totalRevenue)} VND</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Tổng giá vốn:</span>
-                <span className="font-medium">{totalCost.toLocaleString('vi-VN')} VND</span>
+                <span className="font-medium">{formatVN(totalCost)} VND</span>
               </div>
               {totalExtraCharge > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Phụ thu:</span>
-                  <span className="font-medium text-orange-600">+{totalExtraCharge.toLocaleString('vi-VN')} VND</span>
+                  <span className="font-medium text-orange-600">+{formatVN(totalExtraCharge)} VND</span>
                 </div>
               )}
               {totalDiscount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Giảm giá:</span>
-                  <span className="font-medium text-green-600">-{totalDiscount.toLocaleString('vi-VN')} VND</span>
+                  <span className="font-medium text-green-600">-{formatVN(totalDiscount)} VND</span>
                 </div>
               )}
               {(totalExtraCharge > 0 || totalDiscount > 0) && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Tổng sau điều chỉnh:</span>
-                  <span className="font-bold">{adjustedRevenue.toLocaleString('vi-VN')} VND</span>
+                  <span className="font-bold">{formatVN(adjustedRevenue)} VND</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-medium">
                 <span>Lợi nhuận:</span>
                 <span className={totalProfit >= 0 ? 'text-green-600' : 'text-destructive'}>
-                  {totalProfit.toLocaleString('vi-VN')} VND
+                  {formatVN(totalProfit)} VND
                 </span>
               </div>
             </div>
