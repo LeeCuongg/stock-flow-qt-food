@@ -83,14 +83,14 @@ const navItems = [
     icon: CreditCard,
   },
   {
-    title: 'Danh mục',
-    url: '/categories',
-    icon: Tags,
-  },
-  {
     title: 'Chi phí',
     url: '/expenses',
     icon: Receipt,
+  },
+  {
+    title: 'Danh mục',
+    url: '/categories',
+    icon: Tags,
   },
   {
     title: 'Sản phẩm',
@@ -99,19 +99,19 @@ const navItems = [
   },
 ]
 
-const settingsItems = [
-  {
-    title: 'Người dùng',
-    url: '/users',
-    icon: Users,
-    adminOnly: true,
-  },
-  {
-    title: 'Cài đặt',
-    url: '/settings',
-    icon: Settings,
-  },
-]
+// const settingsItems = [
+//   // {
+//   //   title: 'Người dùng',
+//   //   url: '/users',
+//   //   icon: Users,
+//   //   adminOnly: true,
+//   // },
+//   // {
+//   //   title: 'Cài đặt',
+//   //   url: '/settings',
+//   //   icon: Settings,
+//   // },
+// ]
 
 interface AppSidebarProps {
   userEmail?: string
@@ -129,10 +129,10 @@ export function AppSidebar({ userEmail, userFullName, userRole }: AppSidebarProp
     router.push('/auth/login')
   }
 
-  // Lọc menu items dựa trên role
-  const filteredSettingsItems = settingsItems.filter(
-    (item) => !item.adminOnly || userRole === 'admin'
-  )
+  // // Lọc menu items dựa trên role
+  // const filteredSettingsItems = settingsItems.filter(
+  //   (item) => !item.adminOnly || userRole === 'admin'
+  // )
 
   return (
     <Sidebar>
@@ -165,7 +165,7 @@ export function AppSidebar({ userEmail, userFullName, userRole }: AppSidebarProp
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
+        {/* <SidebarGroup>
           <SidebarGroupLabel>Hệ thống</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -181,7 +181,7 @@ export function AppSidebar({ userEmail, userFullName, userRole }: AppSidebarProp
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
-        </SidebarGroup>
+        </SidebarGroup> */}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>

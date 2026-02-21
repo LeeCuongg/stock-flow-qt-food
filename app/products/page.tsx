@@ -20,8 +20,26 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, Search, Package } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Package, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+
+function removeVietnameseTones(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+}
+
+function generateSKU(name: string): string {
+  const clean = removeVietnameseTones(name.trim()).toUpperCase()
+  return clean
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.replace(/[^A-Z0-9]/g, ''))
+    .filter(Boolean)
+    .join('-')
+}
 
 interface Category {
   id: string
@@ -94,6 +112,14 @@ export default function ProductsPage() {
     setEditingProduct(null)
     setForm(emptyForm)
     setDialogOpen(true)
+  }
+
+  const autoGenerateSKU = () => {
+    if (!form.name.trim()) {
+      toast.error('Nhập tên sản phẩm trước để tạo SKU')
+      return
+    }
+    setForm((prev) => ({ ...prev, sku: generateSKU(prev.name) }))
   }
 
   const openEdit = (product: Product) => {
@@ -275,12 +301,27 @@ export default function ProductsPage() {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="name">Tên sản phẩm *</Label>
-              <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input id="name" value={form.name} onChange={(e) => {
+                const newName = e.target.value
+                setForm((prev) => {
+                  const updated = { ...prev, name: newName }
+                  // Tự tạo SKU khi thêm mới và SKU đang trống hoặc là auto-generated
+                  if (!editingProduct && newName.trim()) {
+                    updated.sku = generateSKU(newName)
+                  }
+                  return updated
+                })
+              }} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="sku">SKU</Label>
-                <Input id="sku" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
+                <div className="flex gap-1">
+                  <Input id="sku" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
+                  <Button type="button" variant="outline" size="icon" onClick={autoGenerateSKU} title="Tự tạo SKU">
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="unit">Đơn vị *</Label>
