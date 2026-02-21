@@ -121,6 +121,12 @@ export default function SuppliersPage() {
       setDeleteOpen(false)
       return
     }
+    // Nullify supplier_id on cancelled stock_in to avoid FK constraint
+    await supabase
+      .from('stock_in')
+      .update({ supplier_id: null })
+      .eq('supplier_id', deleting.id)
+      .eq('status', 'CANCELLED')
     const { error } = await supabase.from('suppliers').delete().eq('id', deleting.id)
     if (error) toast.error(`Lỗi: ${error.message}`)
     else { toast.success('Đã xóa'); setDeleteOpen(false); load() }
@@ -437,7 +443,7 @@ export default function SuppliersPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Xóa</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">Xóa</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

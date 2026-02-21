@@ -110,7 +110,7 @@ export default function CustomersPage() {
 
   const handleDelete = async () => {
     if (!deleting) return
-    // Check for active sales linked to this customer
+    // Check for active (non-cancelled) sales linked to this customer
     const { count } = await supabase
       .from('sales')
       .select('id', { count: 'exact', head: true })
@@ -121,6 +121,12 @@ export default function CustomersPage() {
       setDeleteOpen(false)
       return
     }
+    // Nullify customer_id on cancelled sales to avoid FK constraint
+    await supabase
+      .from('sales')
+      .update({ customer_id: null })
+      .eq('customer_id', deleting.id)
+      .eq('status', 'CANCELLED')
     const { error } = await supabase.from('customers').delete().eq('id', deleting.id)
     if (error) toast.error(`Lỗi: ${error.message}`)
     else { toast.success('Đã xóa'); setDeleteOpen(false); load() }
@@ -441,7 +447,7 @@ export default function CustomersPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Xóa</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">Xóa</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
