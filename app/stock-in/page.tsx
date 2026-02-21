@@ -166,8 +166,8 @@ export default function StockInPage() {
       .from('stock_in')
       .select('*', { count: 'exact' })
       .neq('status', 'CANCELLED')
-    if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00')
-    if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59')
+    if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00+07:00')
+    if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59+07:00')
     if (filterSupplierId) query = query.eq('supplier_id', filterSupplierId)
     if (filterPaymentStatus) query = query.eq('payment_status', filterPaymentStatus)
     query = query.order('created_at', { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1)
@@ -410,7 +410,7 @@ export default function StockInPage() {
         p_note: note.trim() || null,
         p_items: rpcItems,
         p_supplier_id: supplierId,
-        p_created_at: createdDate ? new Date(createdDate + 'T00:00:00').toISOString() : null,
+        p_created_at: createdDate ? new Date(createdDate + 'T00:00:00+07:00').toISOString() : null,
       })
 
       if (error) throw error

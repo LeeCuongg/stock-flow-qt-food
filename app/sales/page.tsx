@@ -179,8 +179,8 @@ export default function SalesPage() {
       .from('sales')
       .select('id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, created_at', { count: 'exact' })
       .neq('status', 'CANCELLED')
-    if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00')
-    if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59')
+    if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00+07:00')
+    if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59+07:00')
     if (filterCustomerId) query = query.eq('customer_id', filterCustomerId)
     if (filterPaymentStatus) query = query.eq('payment_status', filterPaymentStatus)
     query = query.order('created_at', { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1)
@@ -377,7 +377,7 @@ export default function SalesPage() {
         p_note: note.trim() || null,
         p_items: rpcItems,
         p_customer_id: customerId,
-        p_created_at: createdDate ? new Date(createdDate + 'T00:00:00').toISOString() : null,
+        p_created_at: createdDate ? new Date(createdDate + 'T00:00:00+07:00').toISOString() : null,
       })
 
       if (error) throw error

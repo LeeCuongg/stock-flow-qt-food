@@ -94,8 +94,8 @@ export default function ExpensesPage() {
       .order('created_at', { ascending: false })
     if (filterCategory !== 'ALL') q = q.eq('category_id', filterCategory)
     if (filterMethod !== 'ALL') q = q.eq('payment_method', filterMethod)
-    if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`)
-    if (endDate) q = q.lte('created_at', `${endDate}T23:59:59`)
+    if (startDate) q = q.gte('created_at', `${startDate}T00:00:00+07:00`)
+    if (endDate) q = q.lte('created_at', `${endDate}T23:59:59+07:00`)
     const { data, error } = await q
     if (error) toast.error('Lỗi tải chi phí')
     else setRecords((data as unknown as ExpenseRecord[]) || [])

@@ -17,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, AlertTriangle, Search } from 'lucide-react'
+import { Plus, AlertTriangle, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 const LOSS_REASONS = [
@@ -51,6 +51,7 @@ interface LossRecord {
   note: string | null
   cost_price: number
   total_loss_cost: number
+  status: string
   created_at: string
   products: { name: string; sku: string | null; unit: string } | null
   inventory_batches: { batch_code: string | null; expiry_date: string | null } | null
@@ -75,12 +76,18 @@ export default function LossPage() {
   const [reason, setReason] = useState('')
   const [note, setNote] = useState('')
   const [productSearch, setProductSearch] = useState('')
-  const [inputMode, setInputMode] = useState<'loss' | 'remaining'>('loss') // 'loss' = nhập SL hao hụt, 'remaining' = nhập SL thực tế còn
-  const [remainingQty, setRemainingQty] = useState(0) // SL thực tế còn trong kho
+  const [inputMode, setInputMode] = useState<'loss' | 'remaining'>('loss')
+  const [remainingQty, setRemainingQty] = useState(0)
 
   // Detail modal
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailRecord, setDetailRecord] = useState<LossRecord | null>(null)
+
+  // Cancel modal
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelRecord, setCancelRecord] = useState<LossRecord | null>(null)
 
   const supabase = createClient()
 
@@ -88,7 +95,7 @@ export default function LossPage() {
     setIsLoading(true)
     const { data, error } = await supabase
       .from('loss_records')
-      .select('id, quantity, reason, note, cost_price, total_loss_cost, created_at, products(name, sku, unit), inventory_batches(batch_code, expiry_date)')
+      .select('id, quantity, reason, note, cost_price, total_loss_cost, status, created_at, products(name, sku, unit), inventory_batches(batch_code, expiry_date)')
       .order('created_at', { ascending: false })
     if (error) toast.error('Lỗi tải dữ liệu hao hụt')
     else setRecords((data as unknown as LossRecord[]) || [])
@@ -126,7 +133,6 @@ export default function LossPage() {
 
   const selectedBatch = batches.find((b) => b.id === selectedBatchId)
 
-  // Tính số lượng hao hụt thực tế dựa trên mode
   const effectiveLossQty = inputMode === 'remaining' && selectedBatch
     ? selectedBatch.quantity_remaining - remainingQty
     : quantity
@@ -157,23 +163,15 @@ export default function LossPage() {
   }
 
   const handleSubmit = async () => {
-    if (!selectedBatchId) {
-      toast.error('Vui lòng chọn lô hàng')
-      return
-    }
-    if (!reason) {
-      toast.error('Vui lòng chọn lý do')
-      return
-    }
+    if (!selectedBatchId) { toast.error('Vui lòng chọn lô hàng'); return }
+    if (!reason) { toast.error('Vui lòng chọn lý do'); return }
 
     const lossQty = inputMode === 'remaining' && selectedBatch
       ? selectedBatch.quantity_remaining - remainingQty
       : quantity
 
     if (lossQty <= 0) {
-      toast.error(inputMode === 'remaining'
-        ? 'Số lượng thực tế phải nhỏ hơn tồn kho hệ thống'
-        : 'Số lượng phải > 0')
+      toast.error(inputMode === 'remaining' ? 'Số lượng thực tế phải nhỏ hơn tồn kho hệ thống' : 'Số lượng phải > 0')
       return
     }
     if (selectedBatch && lossQty > selectedBatch.quantity_remaining) {
@@ -189,10 +187,7 @@ export default function LossPage() {
     try {
       const { data: warehouses } = await supabase.from('warehouses').select('id').limit(1)
       const warehouseId = warehouses?.[0]?.id
-      if (!warehouseId) {
-        toast.error('Chưa có kho')
-        return
-      }
+      if (!warehouseId) { toast.error('Chưa có kho'); return }
 
       const { error } = await supabase.rpc('create_loss_record', {
         p_warehouse_id: warehouseId,
@@ -211,9 +206,32 @@ export default function LossPage() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Lỗi không xác định'
       toast.error(`Lỗi: ${message}`)
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
+  }
+
+  const handleCancel = async () => {
+    if (!cancelRecord) return
+    setCancelling(true)
+    try {
+      const { error } = await supabase.rpc('cancel_loss_record', {
+        p_loss_id: cancelRecord.id,
+        p_reason: cancelReason.trim() || 'Huỷ ghi nhận hao hụt',
+      })
+      if (error) throw error
+      toast.success('Đã huỷ ghi nhận hao hụt')
+      setCancelOpen(false)
+      setDetailOpen(false)
+      loadRecords()
+      loadBatches()
+    } catch (err: unknown) {
+      toast.error(`Lỗi: ${err instanceof Error ? err.message : 'Không xác định'}`)
+    } finally { setCancelling(false) }
+  }
+
+  const openCancelDialog = (record: LossRecord) => {
+    setCancelRecord(record)
+    setCancelReason('')
+    setCancelOpen(true)
   }
 
   const reasonLabel = (value: string) =>
@@ -284,11 +302,16 @@ export default function LossPage() {
                   <TableHead>Lý do</TableHead>
                   <TableHead className="text-right">Giá vốn</TableHead>
                   <TableHead className="text-right">Tiền hao hụt</TableHead>
+                  <TableHead>Trạng thái</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredRecords.map((r) => (
-                  <TableRow key={r.id} className="cursor-pointer" onClick={() => { setDetailRecord(r); setDetailOpen(true) }}>
+                  <TableRow
+                    key={r.id}
+                    className={`cursor-pointer ${r.status === 'CANCELLED' ? 'opacity-50' : ''}`}
+                    onClick={() => { setDetailRecord(r); setDetailOpen(true) }}
+                  >
                     <TableCell className="text-sm">{new Date(r.created_at).toLocaleDateString('vi-VN')}</TableCell>
                     <TableCell className="font-medium">{r.products?.name || '-'}</TableCell>
                     <TableCell className="font-mono text-xs">{r.inventory_batches?.batch_code || '-'}</TableCell>
@@ -304,6 +327,11 @@ export default function LossPage() {
                     <TableCell className="text-right">{Number(r.cost_price).toLocaleString('vi-VN')}</TableCell>
                     <TableCell className="text-right font-medium text-destructive">
                       {Number(r.total_loss_cost).toLocaleString('vi-VN')}
+                    </TableCell>
+                    <TableCell>
+                      {r.status === 'CANCELLED'
+                        ? <Badge variant="destructive">Đã huỷ</Badge>
+                        : <Badge variant="secondary">Hoạt động</Badge>}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -333,12 +361,62 @@ export default function LossPage() {
                 <div><span className="text-muted-foreground">Lý do:</span><br/><Badge variant={reasonBadgeVariant(detailRecord.reason)}>{reasonLabel(detailRecord.reason)}</Badge></div>
                 <div><span className="text-muted-foreground">Giá vốn:</span><br/>{Number(detailRecord.cost_price).toLocaleString('vi-VN')} VND</div>
                 <div><span className="text-muted-foreground">Tiền hao hụt:</span><br/><span className="font-medium text-destructive">{Number(detailRecord.total_loss_cost).toLocaleString('vi-VN')} VND</span></div>
+                <div><span className="text-muted-foreground">Trạng thái:</span><br/>
+                  {detailRecord.status === 'CANCELLED'
+                    ? <Badge variant="destructive">Đã huỷ</Badge>
+                    : <Badge variant="secondary">Hoạt động</Badge>}
+                </div>
               </div>
               {detailRecord.note && (
                 <div><span className="text-muted-foreground">Ghi chú:</span><br/>{detailRecord.note}</div>
               )}
+              {detailRecord.status !== 'CANCELLED' && (
+                <div className="pt-2 border-t">
+                  <Button variant="destructive" size="sm" onClick={() => openCancelDialog(detailRecord)}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Huỷ ghi nhận
+                  </Button>
+                </div>
+              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Confirmation Dialog */}
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận huỷ ghi nhận hao hụt</DialogTitle>
+            <DialogDescription>
+              Tồn kho sẽ được hoàn trả. Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          {cancelRecord && (
+            <div className="rounded-md border p-3 text-sm space-y-1 bg-muted/30">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Sản phẩm:</span>
+                <span className="font-medium">{cancelRecord.products?.name || '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Số lượng hoàn trả:</span>
+                <span className="font-medium">{Number(cancelRecord.quantity).toLocaleString('vi-VN')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Tiền hao hụt:</span>
+                <span className="font-medium text-destructive">{Number(cancelRecord.total_loss_cost).toLocaleString('vi-VN')} VND</span>
+              </div>
+            </div>
+          )}
+          <div className="grid gap-2 py-2">
+            <Label>Lý do huỷ</Label>
+            <Input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Nhập lý do..." />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelOpen(false)}>Đóng</Button>
+            <Button variant="destructive" onClick={handleCancel} disabled={cancelling}>
+              {cancelling ? 'Đang huỷ...' : 'Xác nhận huỷ'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -422,7 +500,7 @@ export default function LossPage() {
               </div>
             )}
 
-            {/* Chế độ nhập */}
+            {/* Input mode */}
             {selectedBatch && (
               <div className="grid gap-2">
                 <Label>Cách nhập</Label>

@@ -72,8 +72,8 @@ export default function PaymentsPage() {
     let q = supabase.from('payments').select('*, customers(name), suppliers(name)').order('created_at', { ascending: false })
     if (filterType !== 'ALL') q = q.eq('payment_type', filterType)
     if (filterMethod !== 'ALL') q = q.eq('payment_method', filterMethod)
-    if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`)
-    if (endDate) q = q.lte('created_at', `${endDate}T23:59:59`)
+    if (startDate) q = q.gte('created_at', `${startDate}T00:00:00+07:00`)
+    if (endDate) q = q.lte('created_at', `${endDate}T23:59:59+07:00`)
     const { data, error } = await q
     if (error) { toast.error('Lỗi tải thanh toán'); setIsLoading(false); return }
     const list = (data as unknown as Payment[]) || []
