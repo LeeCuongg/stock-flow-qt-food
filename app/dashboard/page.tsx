@@ -455,7 +455,7 @@ export default function DashboardPage() {
           )}
 
           {/* Revenue & Profit + Loss charts */}
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4">
             <Card>
               <CardHeader><CardTitle className="text-sm font-medium">Doanh thu & Lợi nhuận theo ngày</CardTitle></CardHeader>
               <CardContent>
@@ -501,8 +501,6 @@ export default function DashboardPage() {
                 }} className="h-[250px] w-full">
                   <BarChart data={[
                     { name: 'Doanh thu', value: financial.revenue, fill: 'hsl(142, 76%, 36%)' },
-                    { name: 'Phụ thu', value: financial.extra_charge, fill: 'hsl(38, 92%, 50%)' },
-                    { name: 'Giảm giá', value: financial.discount, fill: 'hsl(280, 65%, 60%)' },
                     { name: 'Giá vốn', value: financial.cogs, fill: 'hsl(0, 84%, 60%)' },
                     { name: 'LN gộp', value: financial.gross_profit, fill: 'hsl(221, 83%, 53%)' },
                     { name: 'CP vận hành', value: financial.operating_expense, fill: 'hsl(330, 70%, 55%)' },
@@ -513,7 +511,7 @@ export default function DashboardPage() {
                     <YAxis className="text-xs" tickFormatter={shortMoney} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {[0,1,2,3,4,5,6].map((i) => <Cell key={i} />)}
+                      {[0,1,2,3,4].map((i) => <Cell key={i} />)}
                     </Bar>
                   </BarChart>
                 </ChartContainer>
