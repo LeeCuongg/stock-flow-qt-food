@@ -92,7 +92,10 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
   }
 
   const fmt = (amount: number) =>
-    new Intl.NumberFormat("vi-VN").format(amount) + " đ"
+    new Intl.NumberFormat("vi-VN").format(amount)
+
+  const fmtVND = (amount: number) =>
+    new Intl.NumberFormat("vi-VN").format(amount) + " VNĐ"
 
   const fmtDate = (dateStr: string) => {
     try {
@@ -275,8 +278,8 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
                     <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">STT</th>
                     <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">Sản phẩm</th>
                     <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">Số lượng</th>
-                    <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">Đơn giá</th>
-                    <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">Thành tiền</th>
+                    <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold whitespace-nowrap">Đơn giá</th>
+                    <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold whitespace-nowrap">Thành tiền</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -321,7 +324,7 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
                       <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">Ngày thanh toán</th>
                       <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">Phương thức</th>
                       <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">Ghi chú</th>
-                      <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">Số tiền</th>
+                      <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold whitespace-nowrap">Số tiền (VNĐ)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -361,16 +364,16 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
                 <div className="w-full max-w-md space-y-2">
                   <div className="flex justify-between py-1">
                     <span className="text-sm font-medium">Tổng tiền hàng:</span>
-                    <span className="text-sm font-medium">{fmt(merchandiseTotal)}</span>
+                    <span className="text-sm font-medium">{fmtVND(merchandiseTotal)}</span>
                   </div>
                   <div className="flex justify-between py-2 border-t border-gray-300 print:border-black">
                     <span className="text-base font-bold">TỔNG CỘNG:</span>
-                    <span className="text-base font-bold text-primary">{fmt(Number(details.total_amount))}</span>
+                    <span className="text-base font-bold text-primary">{fmtVND(Number(details.total_amount))}</span>
                   </div>
                   {paymentsTotal > 0 && (
                     <div className="flex justify-between py-1">
                       <span className="text-sm font-medium">Đã thanh toán:</span>
-                      <span className="text-sm font-medium text-green-600">{fmt(paymentsTotal)}</span>
+                      <span className="text-sm font-medium text-green-600">{fmtVND(paymentsTotal)}</span>
                     </div>
                   )}
                   <div className="flex justify-between py-2 border-t border-gray-300 print:border-black">
@@ -378,7 +381,7 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
                       {remaining > 0 ? "CÒN NỢ:" : "TRẠNG THÁI:"}
                     </span>
                     <span className={`text-base font-bold ${remaining > 0 ? "text-red-600" : "text-green-600"}`}>
-                      {remaining > 0 ? fmt(remaining) : "Đã thanh toán đủ"}
+                      {remaining > 0 ? fmtVND(remaining) : "Đã thanh toán đủ"}
                     </span>
                   </div>
                 </div>
