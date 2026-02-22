@@ -37,6 +37,7 @@ interface StockInDetail {
     total_price: number
     batch_code: string | null
     expired_date: string | null
+    note: string | null
     products: { name: string; unit: string } | null
   }[]
 }
@@ -74,7 +75,7 @@ export default function StockInDetailPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('stock_in')
-      .select('id, supplier_name, supplier_id, note, total_amount, amount_paid, payment_status, status, created_at, stock_in_items(quantity, cost_price, total_price, batch_code, expired_date, products(name, unit))')
+      .select('id, supplier_name, supplier_id, note, total_amount, amount_paid, payment_status, status, created_at, stock_in_items(quantity, cost_price, total_price, batch_code, expired_date, note, products(name, unit))')
       .eq('id', id)
       .single()
     if (error) { toast.error('Không tìm thấy phiếu nhập'); router.push('/stock-in') }
@@ -262,6 +263,7 @@ export default function StockInDetailPage() {
                     <TableHead className="text-right">SL</TableHead>
                     <TableHead className="text-right">Đơn giá</TableHead>
                     <TableHead className="text-right">Thành tiền</TableHead>
+                    <TableHead>Ghi chú</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -273,6 +275,7 @@ export default function StockInDetailPage() {
                       <TableCell className="text-right">{formatQty(item.quantity)}</TableCell>
                       <TableCell className="text-right">{formatVN(item.cost_price)}</TableCell>
                       <TableCell className="text-right font-medium">{formatVN(item.total_price)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{item.note || ''}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

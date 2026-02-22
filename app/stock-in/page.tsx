@@ -17,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, PackagePlus, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, PackagePlus, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
@@ -101,6 +101,7 @@ interface StockInItem {
   expired_date: string
   quantity: number
   cost_price: number
+  note: string
 }
 
 interface StockInRecord {
@@ -267,6 +268,7 @@ export default function StockInPage() {
         expired_date: '',
         quantity: 1,
         cost_price: supplierPrices[product.id] ?? product.default_cost_price ?? 0,
+        note: '',
       },
     ])
     setProductSearch('')
@@ -403,6 +405,7 @@ export default function StockInPage() {
         expired_date: item.expired_date || null,
         quantity: item.quantity,
         cost_price: item.cost_price,
+        note: item.note.trim() || null,
       }))
 
       const { data: stockInResult, error } = await supabase.rpc('create_stock_in', {
@@ -567,6 +570,9 @@ export default function StockInPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}`) }}>
+                          <Eye className="mr-1 h-3 w-3" /> Xem
+                        </Button>
                         {Number(r.amount_paid) === 0 && (
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}/edit`) }}>
                             <Pencil className="mr-1 h-3 w-3" /> Sửa
@@ -751,6 +757,10 @@ export default function StockInPage() {
                         <CurrencyInput value={item.cost_price}
                           onValueChange={(v) => updateItem(idx, 'cost_price', v)} />
                       </div>
+                    </div>
+                    <div className="grid gap-1">
+                      <Input placeholder="Ghi chú sản phẩm..." value={item.note}
+                        onChange={(e) => updateItem(idx, 'note', e.target.value)} className="text-xs h-8" />
                     </div>
                     <div className="text-right text-sm text-muted-foreground">
                       Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.cost_price)} VND</span>

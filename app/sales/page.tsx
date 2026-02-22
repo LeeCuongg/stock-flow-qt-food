@@ -17,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, ShoppingCart, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, ShoppingCart, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
@@ -113,6 +113,7 @@ interface SaleItem {
   expiry_date: string | null
   quantity: number
   sale_price: number
+  note: string
 }
 
 interface SaleRecord {
@@ -287,6 +288,7 @@ export default function SalesPage() {
         expiry_date: batch.expiry_date,
         quantity: 1,
         sale_price: customerPrices[product.id] ?? product.default_sale_price ?? 0,
+        note: '',
       },
     ])
     setSelectedProductId('')
@@ -370,6 +372,7 @@ export default function SalesPage() {
         batch_id: item.batch_id,
         quantity: item.quantity,
         sale_price: item.sale_price,
+        note: item.note.trim() || null,
       }))
 
       const { data: saleResult, error } = await supabase.rpc('create_sale', {
@@ -594,6 +597,9 @@ export default function SalesPage() {
                     <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">{r.note || '-'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/sales/${r.id}`) }}>
+                          <Eye className="mr-1 h-3 w-3" /> Xem
+                        </Button>
                         {Number(r.amount_paid) === 0 && (
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/sales/${r.id}/edit`) }}>
                             <Pencil className="mr-1 h-3 w-3" /> Sửa
@@ -803,6 +809,10 @@ export default function SalesPage() {
                         <CurrencyInput value={item.sale_price}
                           onValueChange={(v) => updateItem(idx, 'sale_price', v)} />
                       </div>
+                    </div>
+                    <div className="grid gap-1">
+                      <Input placeholder="Ghi chú sản phẩm..." value={item.note}
+                        onChange={(e) => updateItem(idx, 'note', e.target.value)} className="text-xs h-8" />
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">

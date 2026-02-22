@@ -38,6 +38,7 @@ interface EditSaleItem {
   old_qty: number
   quantity: number
   sale_price: number
+  note: string
 }
 
 export default function SaleEditPage() {
@@ -66,7 +67,7 @@ export default function SaleEditPage() {
     const [saleRes, custRes, prodRes, batchRes, adjRes] = await Promise.all([
       supabase
         .from('sales')
-        .select('id, customer_id, note, status, amount_paid, sales_items(product_id, batch_id, quantity, sale_price, cost_price, products(name, unit), inventory_batches(id, batch_code, quantity_remaining, cost_price, expiry_date))')
+        .select('id, customer_id, note, status, amount_paid, sales_items(product_id, batch_id, quantity, sale_price, cost_price, note, products(name, unit), inventory_batches(id, batch_code, quantity_remaining, cost_price, expiry_date))')
         .eq('id', id)
         .single(),
       supabase.from('customers').select('id, name').order('name'),
@@ -79,7 +80,7 @@ export default function SaleEditPage() {
     const sale = saleRes.data as unknown as {
       id: string; customer_id: string | null; note: string | null; status: string; amount_paid: number
       sales_items: {
-        product_id: string; batch_id: string; quantity: number; sale_price: number; cost_price: number
+        product_id: string; batch_id: string; quantity: number; sale_price: number; cost_price: number; note: string | null
         products: { name: string; unit: string } | null
         inventory_batches: { id: string; batch_code: string | null; quantity_remaining: number; cost_price: number; expiry_date: string | null } | null
       }[]
@@ -102,6 +103,7 @@ export default function SaleEditPage() {
       old_qty: Number(si.quantity),
       quantity: Number(si.quantity),
       sale_price: Number(si.sale_price),
+      note: si.note || '',
     })))
     setCustomers(custRes.data || [])
     setProducts(prodRes.data || [])
@@ -143,6 +145,7 @@ export default function SaleEditPage() {
       old_qty: 0,
       quantity: 1,
       sale_price: product.default_sale_price ?? 0,
+      note: '',
     }])
     setSelectedProductId('')
   }
@@ -183,6 +186,7 @@ export default function SaleEditPage() {
         batch_id: item.batch_id,
         quantity: item.quantity,
         sale_price: item.sale_price,
+        note: item.note.trim() || null,
       }))
       const { error } = await supabase.rpc('update_sale', {
         p_sale_id: id,
@@ -318,6 +322,10 @@ export default function SaleEditPage() {
                   <Label className="text-xs text-muted-foreground">Giá bán *</Label>
                   <CurrencyInput value={item.sale_price} onValueChange={(v) => updateItem(idx, 'sale_price', v)} />
                 </div>
+              </div>
+              <div className="grid gap-1">
+                <Input placeholder="Ghi chú sản phẩm..." value={item.note}
+                  onChange={(e) => updateItem(idx, 'note', e.target.value)} className="text-xs h-8" />
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">

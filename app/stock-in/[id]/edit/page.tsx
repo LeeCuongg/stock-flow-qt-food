@@ -31,6 +31,7 @@ interface EditItem {
   expired_date: string
   quantity: number
   cost_price: number
+  note: string
 }
 
 interface LandedCost {
@@ -72,7 +73,7 @@ export default function StockInEditPage() {
     const [siRes, suppRes, prodRes] = await Promise.all([
       supabase
         .from('stock_in')
-        .select('id, supplier_id, note, status, amount_paid, stock_in_items(product_id, batch_code, expired_date, quantity, cost_price, products(name, unit))')
+        .select('id, supplier_id, note, status, amount_paid, stock_in_items(product_id, batch_code, expired_date, quantity, cost_price, note, products(name, unit))')
         .eq('id', id)
         .single(),
       supabase.from('suppliers').select('id, name').order('name'),
@@ -82,7 +83,7 @@ export default function StockInEditPage() {
     if (siRes.error) { toast.error('Không tìm thấy phiếu nhập'); router.push('/stock-in'); return }
     const si = siRes.data as unknown as {
       id: string; supplier_id: string | null; note: string | null; status: string; amount_paid: number
-      stock_in_items: { product_id: string; batch_code: string; expired_date: string | null; quantity: number; cost_price: number; products: { name: string; unit: string } | null }[]
+      stock_in_items: { product_id: string; batch_code: string; expired_date: string | null; quantity: number; cost_price: number; note: string | null; products: { name: string; unit: string } | null }[]
     }
 
     if (si.status === 'CANCELLED') { toast.error('Phiếu đã hủy, không thể chỉnh sửa'); router.push(`/stock-in/${id}`); return }
@@ -99,6 +100,7 @@ export default function StockInEditPage() {
       expired_date: item.expired_date || '',
       quantity: Number(item.quantity),
       cost_price: Number(item.cost_price),
+      note: item.note || '',
     })))
     setSuppliers(suppRes.data || [])
     setProducts(prodRes.data || [])
@@ -155,6 +157,7 @@ export default function StockInEditPage() {
       expired_date: '',
       quantity: 1,
       cost_price: product.default_cost_price ?? 0,
+      note: '',
     }])
     setProductSearch('')
   }
@@ -193,6 +196,7 @@ export default function StockInEditPage() {
         expired_date: item.expired_date || null,
         quantity: item.quantity,
         cost_price: item.cost_price,
+        note: item.note.trim() || null,
       }))
       const { error } = await supabase.rpc('update_stock_in', {
         p_stock_in_id: id,
@@ -305,6 +309,10 @@ export default function StockInEditPage() {
                   <Label className="text-xs text-muted-foreground">Giá nhập *</Label>
                   <CurrencyInput value={item.cost_price} onValueChange={(v) => updateItem(idx, 'cost_price', v)} />
                 </div>
+              </div>
+              <div className="grid gap-1">
+                <Input placeholder="Ghi chú sản phẩm..." value={item.note}
+                  onChange={(e) => updateItem(idx, 'note', e.target.value)} className="text-xs h-8" />
               </div>
               <div className="text-right text-sm text-muted-foreground">
                 Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.cost_price)} VND</span>

@@ -26,6 +26,7 @@ interface SaleBatchDetail {
     sale_price: number
     cost_price: number
     total_price: number
+    note: string | null
     products: { name: string; unit: string } | null
     inventory_batches: { batch_code: string | null; expiry_date: string | null } | null
   }>
@@ -71,7 +72,7 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
     try {
       const { data, error } = await supabase
         .from('sales')
-        .select('id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, status, created_at, sales_items(quantity, sale_price, cost_price, total_price, products(name, unit), inventory_batches(batch_code, expiry_date)), customers(phone)')
+        .select('id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, status, created_at, sales_items(quantity, sale_price, cost_price, total_price, note, products(name, unit), inventory_batches(batch_code, expiry_date)), customers(phone)')
         .eq('id', saleId)
         .single()
       if (error) throw error

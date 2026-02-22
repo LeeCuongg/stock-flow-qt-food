@@ -25,6 +25,7 @@ interface StockInBatchDetail {
     total_price: number
     batch_code: string | null
     expired_date: string | null
+    note: string | null
     products: { name: string; unit: string } | null
   }>
   suppliers: { phone: string | null } | null
@@ -69,7 +70,7 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
     try {
       const { data, error } = await supabase
         .from('stock_in')
-        .select('id, supplier_name, supplier_id, note, total_amount, amount_paid, payment_status, status, created_at, stock_in_items(quantity, cost_price, total_price, batch_code, expired_date, products(name, unit)), suppliers(phone)')
+        .select('id, supplier_name, supplier_id, note, total_amount, amount_paid, payment_status, status, created_at, stock_in_items(quantity, cost_price, total_price, batch_code, expired_date, note, products(name, unit)), suppliers(phone)')
         .eq('id', stockInId)
         .single()
       if (error) throw error

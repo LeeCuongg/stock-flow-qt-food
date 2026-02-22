@@ -40,6 +40,7 @@ interface SaleDetail {
     sale_price: number
     cost_price: number
     total_price: number
+    note: string | null
     products: { name: string; unit: string } | null
     inventory_batches: { batch_code: string | null; expiry_date: string | null } | null
   }[]
@@ -77,7 +78,7 @@ export default function SaleDetailPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('sales')
-      .select('id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, status, created_at, sales_items(quantity, sale_price, cost_price, total_price, products(name, unit), inventory_batches(batch_code, expiry_date))')
+      .select('id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, status, created_at, sales_items(quantity, sale_price, cost_price, total_price, note, products(name, unit), inventory_batches(batch_code, expiry_date))')
       .eq('id', id)
       .single()
     if (error) { toast.error('Không tìm thấy đơn xuất'); router.push('/sales') }
@@ -225,6 +226,7 @@ export default function SaleDetailPage() {
                     <TableHead className="text-right">Giá bán</TableHead>
                     <TableHead className="text-right">Giá vốn</TableHead>
                     <TableHead className="text-right">Thành tiền</TableHead>
+                    <TableHead>Ghi chú</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -236,6 +238,7 @@ export default function SaleDetailPage() {
                       <TableCell className="text-right">{formatVN(item.sale_price)}</TableCell>
                       <TableCell className="text-right">{formatVN(item.cost_price)}</TableCell>
                       <TableCell className="text-right font-medium">{formatVN(item.total_price)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{item.note || ''}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
