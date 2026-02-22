@@ -775,61 +775,96 @@ export default function SalesPage() {
               </div>
             )}
 
-            {/* Items list */}
+            {/* Items list - grouped by product */}
             {items.length > 0 && (
               <div className="space-y-3">
                 <Label>Sản phẩm đã chọn ({items.length})</Label>
-                {items.map((item, idx) => (
-                  <div key={idx} className="border rounded-lg p-3 space-y-3 relative">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{item.product_name}</span>
-                        <Badge variant="secondary" className="text-xs">{item.product_unit}</Badge>
-                        <Badge variant="outline" className="font-mono text-xs">{item.batch_code}</Badge>
+                {(() => {
+                  // Group items by product_id, preserving original indices
+                  const grouped: { product_id: string; product_name: string; product_unit: string; entries: { item: SaleItem; idx: number }[] }[] = []
+                  items.forEach((item, idx) => {
+                    const existing = grouped.find(g => g.product_id === item.product_id)
+                    if (existing) {
+                      existing.entries.push({ item, idx })
+                    } else {
+                      grouped.push({ product_id: item.product_id, product_name: item.product_name, product_unit: item.product_unit, entries: [{ item, idx }] })
+                    }
+                  })
+                  return grouped.map((group) => {
+                    const groupRevenue = group.entries.reduce((s, e) => s + e.item.quantity * e.item.sale_price, 0)
+                    const groupCost = group.entries.reduce((s, e) => s + e.item.quantity * e.item.batch_cost_price, 0)
+                    const groupProfit = groupRevenue - groupCost
+                    const groupQty = group.entries.reduce((s, e) => s + e.item.quantity, 0)
+                    return (
+                      <div key={group.product_id} className="border rounded-lg p-3 space-y-3">
+                        {/* Product header */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{group.product_name}</span>
+                          <Badge variant="secondary" className="text-xs">{group.product_unit}</Badge>
+                          {group.entries.length > 1 && (
+                            <Badge variant="outline" className="text-xs">{group.entries.length} lô</Badge>
+                          )}
+                        </div>
+                        {/* Batch entries */}
+                        {group.entries.map(({ item, idx }, batchIdx) => (
+                          <div key={idx} className={`space-y-2 ${batchIdx > 0 ? 'border-t pt-3' : ''}`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Badge variant="outline" className="font-mono text-xs">{item.batch_code}</Badge>
+                                <span>Tồn: {item.batch_remaining}</span>
+                                {item.expiry_date && (
+                                  <span>• HSD: {new Date(item.expiry_date).toLocaleDateString('vi-VN')}</span>
+                                )}
+                                <span>• Giá vốn: {formatVN(item.batch_cost_price)}</span>
+                              </div>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="grid gap-1">
+                                <Label className="text-xs text-muted-foreground">Số lượng * (tối đa {item.batch_remaining})</Label>
+                                <Input type="number" min={1} max={item.batch_remaining} value={item.quantity}
+                                  onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} />
+                              </div>
+                              <div className="grid gap-1">
+                                <Label className="text-xs text-muted-foreground">Giá bán *</Label>
+                                <CurrencyInput value={item.sale_price}
+                                  onValueChange={(v) => updateItem(idx, 'sale_price', v)} />
+                              </div>
+                            </div>
+                            <div className="grid gap-1">
+                              <Input placeholder="Ghi chú sản phẩm..." value={item.note}
+                                onChange={(e) => updateItem(idx, 'note', e.target.value)} className="text-xs h-8" />
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.sale_price)}</span>
+                              </span>
+                              <span className="text-muted-foreground">
+                                Lãi: <span className={
+                                  (item.quantity * item.sale_price - item.quantity * item.batch_cost_price) >= 0
+                                    ? 'font-medium text-green-600'
+                                    : 'font-medium text-destructive'
+                                }>
+                                  {formatVN(item.quantity * item.sale_price - item.quantity * item.batch_cost_price)}
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {/* Group summary (only when multiple batches) */}
+                        {group.entries.length > 1 && (
+                          <div className="border-t pt-2 flex justify-between text-xs text-muted-foreground">
+                            <span>Tổng SL: <span className="font-medium text-foreground">{formatQty(groupQty)}</span></span>
+                            <span>Thành tiền: <span className="font-medium text-foreground">{formatVN(groupRevenue)}</span></span>
+                            <span>Lãi: <span className={groupProfit >= 0 ? 'font-medium text-green-600' : 'font-medium text-destructive'}>{formatVN(groupProfit)}</span></span>
+                          </div>
+                        )}
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>Tồn: {item.batch_remaining}</span>
-                      {item.expiry_date && (
-                        <span>• HSD: {new Date(item.expiry_date).toLocaleDateString('vi-VN')}</span>
-                      )}
-                      <span>• Giá vốn: {formatVN(item.batch_cost_price)}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="grid gap-1">
-                        <Label className="text-xs text-muted-foreground">Số lượng * (tối đa {item.batch_remaining})</Label>
-                        <Input type="number" min={1} max={item.batch_remaining} value={item.quantity}
-                          onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} />
-                      </div>
-                      <div className="grid gap-1">
-                        <Label className="text-xs text-muted-foreground">Giá bán *</Label>
-                        <CurrencyInput value={item.sale_price}
-                          onValueChange={(v) => updateItem(idx, 'sale_price', v)} />
-                      </div>
-                    </div>
-                    <div className="grid gap-1">
-                      <Input placeholder="Ghi chú sản phẩm..." value={item.note}
-                        onChange={(e) => updateItem(idx, 'note', e.target.value)} className="text-xs h-8" />
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.sale_price)}</span>
-                      </span>
-                      <span className="text-muted-foreground">
-                        Lãi: <span className={
-                          (item.quantity * item.sale_price - item.quantity * item.batch_cost_price) >= 0
-                            ? 'font-medium text-green-600'
-                            : 'font-medium text-destructive'
-                        }>
-                          {formatVN(item.quantity * item.sale_price - item.quantity * item.batch_cost_price)}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                    )
+                  })
+                })()}
 
                 {/* Totals */}
                 <div className="border-t pt-3 space-y-1">

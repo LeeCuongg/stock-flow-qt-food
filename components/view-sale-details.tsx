@@ -271,24 +271,44 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
                   </tr>
                 </thead>
                 <tbody>
-                  {details.sales_items.map((entry, index) => (
-                    <tr key={index} className="hover:bg-gray-50 print:hover:bg-white">
-                      <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center">{index + 1}</td>
-                      <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-left">
-                        {entry.products?.name || "-"}
-                        <span className="text-gray-500 text-xs ml-1">({entry.products?.unit})</span>
-                      </td>
-                      <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center">
-                        {new Intl.NumberFormat("vi-VN").format(entry.quantity)}
-                      </td>
-                      <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center">
-                        {fmt(entry.sale_price)}
-                      </td>
-                      <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center font-medium">
-                        {fmt(entry.total_price)}
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    // Group items by product name + unit + sale_price
+                    const grouped: { name: string; unit: string; sale_price: number; quantity: number; total_price: number }[] = []
+                    details.sales_items.forEach((entry) => {
+                      const key = `${entry.products?.name}|${entry.products?.unit}|${entry.sale_price}`
+                      const existing = grouped.find(g => `${g.name}|${g.unit}|${g.sale_price}` === key)
+                      if (existing) {
+                        existing.quantity += Number(entry.quantity)
+                        existing.total_price += Number(entry.total_price)
+                      } else {
+                        grouped.push({
+                          name: entry.products?.name || "-",
+                          unit: entry.products?.unit || "",
+                          sale_price: entry.sale_price,
+                          quantity: Number(entry.quantity),
+                          total_price: Number(entry.total_price),
+                        })
+                      }
+                    })
+                    return grouped.map((row, index) => (
+                      <tr key={index} className="hover:bg-gray-50 print:hover:bg-white">
+                        <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center">{index + 1}</td>
+                        <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-left">
+                          {row.name}
+                          <span className="text-gray-500 text-xs ml-1">({row.unit})</span>
+                        </td>
+                        <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center">
+                          {new Intl.NumberFormat("vi-VN").format(row.quantity)}
+                        </td>
+                        <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center">
+                          {fmt(row.sale_price)}
+                        </td>
+                        <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center font-medium">
+                          {fmt(row.total_price)}
+                        </td>
+                      </tr>
+                    ))
+                  })()}
                   <tr className="bg-gray-50 print:bg-gray-100 font-semibold">
                     <td colSpan={4} className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm">
                       Tổng tiền hàng:
