@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { ViewStockInDetails } from '@/components/view-stock-in-details'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, vnToday, vnDateTimeISO, formatVNDate } from '@/lib/utils'
 
 interface Supplier { id: string; name: string }
 
@@ -49,7 +49,7 @@ const DATE_PRESETS = [
 
 function getDateRange(preset: string): { from: string; to: string } {
   const today = new Date()
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
+  const fmt = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
   const todayStr = fmt(today)
   switch (preset) {
     case 'today':
@@ -129,7 +129,7 @@ export default function StockInPage() {
   const [selectedSupplierId, setSelectedSupplierId] = useState('')
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [note, setNote] = useState('')
-  const [createdDate, setCreatedDate] = useState(new Date().toISOString().split('T')[0])
+  const [createdDate, setCreatedDate] = useState(() => vnToday())
   const [items, setItems] = useState<StockInItem[]>([])
   // Payment modal
   const [payDialogOpen, setPayDialogOpen] = useState(false)
@@ -156,6 +156,7 @@ export default function StockInPage() {
   const [filterDatePreset, setFilterDatePreset] = useState('all')
   const [filterSupplierId, setFilterSupplierId] = useState('')
   const [filterPaymentStatus, setFilterPaymentStatus] = useState('')
+  const [filterProductId, setFilterProductId] = useState('')
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
   const pageSize = 50
@@ -164,15 +165,21 @@ export default function StockInPage() {
 
   const loadRecords = useCallback(async () => {
     setIsLoading(true)
-    let query = supabase
-      .from('stock_in')
-      .select('*', { count: 'exact' })
-      .neq('status', 'CANCELLED')
+    let query = filterProductId
+      ? supabase
+          .from('stock_in')
+          .select('*, stock_in_items!inner(product_id)', { count: 'exact' })
+          .neq('status', 'CANCELLED')
+          .eq('stock_in_items.product_id', filterProductId)
+      : supabase
+          .from('stock_in')
+          .select('*', { count: 'exact' })
+          .neq('status', 'CANCELLED')
     if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00+07:00')
     if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59+07:00')
     if (filterSupplierId) query = query.eq('supplier_id', filterSupplierId)
     if (filterPaymentStatus) query = query.eq('payment_status', filterPaymentStatus)
-    query = query.order('created_at', { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1)
+    query = query.order('created_at', { ascending: false }).order('id', { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1)
     const { data, error, count } = await query
     if (error) toast.error('Lỗi tải phiếu nhập')
     else {
@@ -180,7 +187,7 @@ export default function StockInPage() {
       setTotalCount(count || 0)
     }
     setIsLoading(false)
-  }, [filterDateFrom, filterDateTo, filterSupplierId, filterPaymentStatus, page])
+  }, [filterDateFrom, filterDateTo, filterSupplierId, filterPaymentStatus, filterProductId, page])
 
   const loadProducts = useCallback(async () => {
     const { data } = await supabase
@@ -225,7 +232,7 @@ export default function StockInPage() {
     setSupplierAddress('')
     setSelectedSupplierId('')
     setNote('')
-    setCreatedDate(new Date().toISOString().split('T')[0])
+    setCreatedDate(vnToday())
     setItems([])
     setLandedCostEntries([])
     setDialogOpen(true)
@@ -235,7 +242,7 @@ export default function StockInPage() {
     try {
       const { data, error } = await supabase.rpc('generate_batch_code', {
         p_product_id: productId,
-        p_date: new Date().toISOString().split('T')[0],
+        p_date: vnToday(),
       })
       if (error) throw error
       return data as string
@@ -243,7 +250,7 @@ export default function StockInPage() {
       // Fallback: sinh mã lô phía client
       const product = products.find(p => p.id === productId)
       const prefix = product?.sku ? product.sku.toUpperCase() : (product?.name || 'PROD').substring(0, 4).toUpperCase().replace(/\s/g, '')
-      const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '')
+      const dateStr = vnToday().replace(/-/g, '')
       const existingCount = items.filter(i => i.batch_code.startsWith(`${prefix}-${dateStr}-`)).length
       return `${prefix}-${dateStr}-${String(existingCount + 1).padStart(3, '0')}`
     }
@@ -406,7 +413,7 @@ export default function StockInPage() {
         p_note: note.trim() || null,
         p_items: rpcItems,
         p_supplier_id: supplierId,
-        p_created_at: createdDate ? new Date(createdDate + 'T00:00:00+07:00').toISOString() : null,
+        p_created_at: createdDate ? vnDateTimeISO(createdDate) : null,
       })
 
       if (error) throw error
@@ -506,11 +513,22 @@ export default function StockInPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Sản phẩm</Label>
+              <SearchableSelect
+                options={[{ value: 'all', label: 'Tất cả' }, ...products.map((p) => ({ value: p.id, label: p.name }))]}
+                value={filterProductId || 'all'}
+                onValueChange={(val) => setFilterProductId(val === 'all' ? '' : val)}
+                placeholder="Tất cả"
+                searchPlaceholder="Tìm sản phẩm..."
+                triggerClassName="w-[180px] h-9"
+              />
+            </div>
             <Button variant="outline" size="sm" className="h-9" onClick={() => { setPage(0); loadRecords() }}>
               <Search className="mr-1 h-3 w-3" /> Lọc
             </Button>
-            {(filterDatePreset !== 'all' || filterSupplierId || filterPaymentStatus) && (
-              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterSupplierId(''); setFilterPaymentStatus(''); setPage(0) }}>
+            {(filterDatePreset !== 'all' || filterSupplierId || filterPaymentStatus || filterProductId) && (
+              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterSupplierId(''); setFilterPaymentStatus(''); setFilterProductId(''); setPage(0) }}>
                 <X className="mr-1 h-3 w-3" /> Xoá lọc
               </Button>
             )}
@@ -546,7 +564,7 @@ export default function StockInPage() {
               <TableBody>
                 {records.map((r) => (
                   <TableRow key={r.id} className="cursor-pointer" onClick={() => openDetail(r)}>
-                    <TableCell>{new Date(r.created_at).toLocaleDateString('vi-VN')}</TableCell>
+                    <TableCell>{formatVNDate(r.created_at)}</TableCell>
                     <TableCell>{r.supplier_name || '-'}</TableCell>
                     <TableCell className="text-right font-medium">
                       {formatVN(r.total_amount)}

@@ -16,3 +16,19 @@ export function formatQty(n: number): string {
   if (Number.isInteger(v)) return v.toLocaleString('vi-VN')
   return v.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 3 })
 }
+
+/** Lấy ngày hiện tại theo giờ Việt Nam (YYYY-MM-DD) */
+export function vnToday(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
+}
+
+/** Tạo ISO timestamp từ ngày custom + giờ thực tế Việt Nam hiện tại */
+export function vnDateTimeISO(dateStr: string): string {
+  const vnTime = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })
+  return new Date(dateStr + 'T' + vnTime + '+07:00').toISOString()
+}
+
+/** Format ngày hiển thị theo giờ Việt Nam */
+export function formatVNDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+}

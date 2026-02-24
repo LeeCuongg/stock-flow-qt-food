@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { ViewSaleDetails } from '@/components/view-sale-details'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, vnToday, vnDateTimeISO, formatVNDate } from '@/lib/utils'
 
 interface Customer { id: string; name: string }
 
@@ -49,7 +49,7 @@ const DATE_PRESETS = [
 
 function getDateRange(preset: string): { from: string; to: string } {
   const today = new Date()
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
+  const fmt = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
   const todayStr = fmt(today)
   switch (preset) {
     case 'today':
@@ -143,7 +143,7 @@ export default function SalesPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
   const [customers, setCustomers] = useState<Customer[]>([])
   const [note, setNote] = useState('')
-  const [createdDate, setCreatedDate] = useState(new Date().toISOString().split('T')[0])
+  const [createdDate, setCreatedDate] = useState(() => vnToday())
   const [items, setItems] = useState<SaleItem[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
   // Adjustments in create dialog
@@ -169,6 +169,7 @@ export default function SalesPage() {
   const [filterDatePreset, setFilterDatePreset] = useState('all')
   const [filterCustomerId, setFilterCustomerId] = useState('')
   const [filterPaymentStatus, setFilterPaymentStatus] = useState('')
+  const [filterProductId, setFilterProductId] = useState('')
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
   const pageSize = 50
@@ -177,15 +178,24 @@ export default function SalesPage() {
 
   const loadRecords = useCallback(async () => {
     setIsLoading(true)
-    let query = supabase
-      .from('sales')
-      .select('id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, created_at', { count: 'exact' })
-      .neq('status', 'CANCELLED')
+
+    const selectCols = 'id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, created_at'
+    let query = filterProductId
+      ? supabase
+          .from('sales')
+          .select(`${selectCols}, sales_items!inner(product_id)`, { count: 'exact' })
+          .neq('status', 'CANCELLED')
+          .eq('sales_items.product_id', filterProductId)
+      : supabase
+          .from('sales')
+          .select(selectCols, { count: 'exact' })
+          .neq('status', 'CANCELLED')
+
     if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00+07:00')
     if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59+07:00')
     if (filterCustomerId) query = query.eq('customer_id', filterCustomerId)
     if (filterPaymentStatus) query = query.eq('payment_status', filterPaymentStatus)
-    query = query.order('created_at', { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1)
+    query = query.order('created_at', { ascending: false }).order('id', { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1)
     const { data, error, count } = await query
     if (error) toast.error('Lỗi tải đơn bán')
     else {
@@ -193,7 +203,7 @@ export default function SalesPage() {
       setTotalCount(count || 0)
     }
     setIsLoading(false)
-  }, [filterDateFrom, filterDateTo, filterCustomerId, filterPaymentStatus, page])
+  }, [filterDateFrom, filterDateTo, filterCustomerId, filterPaymentStatus, filterProductId, page])
 
   const loadProducts = useCallback(async () => {
     const { data } = await supabase
@@ -252,7 +262,7 @@ export default function SalesPage() {
     setCustomerAddress('')
     setSelectedCustomerId('')
     setNote('')
-    setCreatedDate(new Date().toISOString().split('T')[0])
+    setCreatedDate(vnToday())
     setItems([])
     setSelectedProductId('')
     setCreateAdjustments([])
@@ -374,7 +384,7 @@ export default function SalesPage() {
         p_note: note.trim() || null,
         p_items: rpcItems,
         p_customer_id: customerId,
-        p_created_at: createdDate ? new Date(createdDate + 'T00:00:00+07:00').toISOString() : null,
+        p_created_at: createdDate ? vnDateTimeISO(createdDate) : null,
       })
 
       if (error) throw error
@@ -536,11 +546,22 @@ export default function SalesPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Sản phẩm</Label>
+              <SearchableSelect
+                options={[{ value: 'all', label: 'Tất cả' }, ...products.map((p) => ({ value: p.id, label: p.name }))]}
+                value={filterProductId || 'all'}
+                onValueChange={(val) => setFilterProductId(val === 'all' ? '' : val)}
+                placeholder="Tất cả"
+                searchPlaceholder="Tìm sản phẩm..."
+                triggerClassName="w-[180px] h-9"
+              />
+            </div>
             <Button variant="outline" size="sm" className="h-9" onClick={() => { setPage(0); loadRecords() }}>
               <Search className="mr-1 h-3 w-3" /> Lọc
             </Button>
-            {(filterDatePreset !== 'all' || filterCustomerId || filterPaymentStatus) && (
-              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterCustomerId(''); setFilterPaymentStatus(''); setPage(0) }}>
+            {(filterDatePreset !== 'all' || filterCustomerId || filterPaymentStatus || filterProductId) && (
+              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterCustomerId(''); setFilterPaymentStatus(''); setFilterProductId(''); setPage(0) }}>
                 <X className="mr-1 h-3 w-3" /> Xoá lọc
               </Button>
             )}
@@ -577,7 +598,7 @@ export default function SalesPage() {
               <TableBody>
                 {records.map((r) => (
                   <TableRow key={r.id} className="cursor-pointer" onClick={() => openSaleDetail(r)}>
-                    <TableCell>{new Date(r.created_at).toLocaleDateString('vi-VN')}</TableCell>
+                    <TableCell>{formatVNDate(r.created_at)}</TableCell>
                     <TableCell>{r.customer_name || '-'}</TableCell>
                     <TableCell className="text-right font-medium">
                       {formatVN(r.total_revenue)}
@@ -740,7 +761,7 @@ export default function SalesPage() {
                           </span>
                           {batch.expiry_date && (
                             <span className="text-xs text-muted-foreground">
-                              HSD: {new Date(batch.expiry_date).toLocaleDateString('vi-VN')}
+                              HSD: {formatVNDate(batch.expiry_date)}
                             </span>
                           )}
                         </div>
@@ -792,7 +813,7 @@ export default function SalesPage() {
                                 <Badge variant="outline" className="font-mono text-xs">{item.batch_code}</Badge>
                                 <span>Tồn: {item.batch_remaining}</span>
                                 {item.expiry_date && (
-                                  <span>• HSD: {new Date(item.expiry_date).toLocaleDateString('vi-VN')}</span>
+                                  <span>• HSD: {formatVNDate(item.expiry_date)}</span>
                                 )}
                                 <span>• Giá vốn: {formatVN(item.batch_cost_price)}</span>
                               </div>

@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { ArrowLeft, Pencil, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, formatVNDate } from '@/lib/utils'
 
 interface StockInDetail {
   id: string
@@ -271,7 +271,7 @@ export default function StockInDetailPage() {
                     <TableRow key={i}>
                       <TableCell className="font-medium">{item.products?.name || '-'}</TableCell>
                       <TableCell className="font-mono text-xs">{item.batch_code || '-'}</TableCell>
-                      <TableCell className="text-sm">{item.expired_date ? new Date(item.expired_date).toLocaleDateString('vi-VN') : '-'}</TableCell>
+                      <TableCell className="text-sm">{item.expired_date ? formatVNDate(item.expired_date) : '-'}</TableCell>
                       <TableCell className="text-right">{formatQty(item.quantity)}</TableCell>
                       <TableCell className="text-right">{formatVN(item.cost_price)}</TableCell>
                       <TableCell className="text-right font-medium">{formatVN(item.total_price)}</TableCell>

@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea'
 import { CreditCard, Ban } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, formatVNDate } from '@/lib/utils'
 
 interface Payment {
   id: string
@@ -70,7 +70,7 @@ export default function PaymentsPage() {
 
   const load = useCallback(async () => {
     setIsLoading(true)
-    let q = supabase.from('payments').select('*, customers(name), suppliers(name)').order('created_at', { ascending: false })
+    let q = supabase.from('payments').select('*, customers(name), suppliers(name)').order('created_at', { ascending: false }).order('id', { ascending: false })
     if (filterType !== 'ALL') q = q.eq('payment_type', filterType)
     if (filterMethod !== 'ALL') q = q.eq('payment_method', filterMethod)
     if (startDate) q = q.gte('created_at', `${startDate}T00:00:00+07:00`)
@@ -245,7 +245,7 @@ export default function PaymentsPage() {
                         className={`cursor-pointer ${p.status === 'VOIDED' ? 'opacity-50 line-through' : ''}`}
                         onClick={() => openDetail(p)}
                       >
-                        <TableCell className="text-sm">{new Date(p.created_at).toLocaleDateString('vi-VN')}</TableCell>
+                        <TableCell className="text-sm">{formatVNDate(p.created_at)}</TableCell>
                         <TableCell>
                           {p.status === 'VOIDED'
                             ? <Badge variant="outline" className="text-muted-foreground">Đã huỷ</Badge>

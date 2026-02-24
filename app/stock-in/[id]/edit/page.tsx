@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, formatVNDate } from '@/lib/utils'
 
 interface Supplier { id: string; name: string }
 interface Product { id: string; name: string; sku: string | null; unit: string; default_cost_price: number }

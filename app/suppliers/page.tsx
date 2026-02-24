@@ -16,7 +16,7 @@ import { Plus, Trash2, Search, Truck, CreditCard } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, formatVNDate } from '@/lib/utils'
 
 interface Supplier { id: string; name: string; phone: string | null; address: string | null; note: string | null; created_at: string }
 interface UnpaidStockIn { id: string; created_at: string; total_amount: number; amount_paid: number; supplier_name: string | null }
@@ -63,7 +63,7 @@ export default function SuppliersPage() {
 
   const load = useCallback(async () => {
     setIsLoading(true)
-    let q = supabase.from('suppliers').select('*').order('created_at', { ascending: false })
+    let q = supabase.from('suppliers').select('*').order('created_at', { ascending: false }).order('id', { ascending: false })
     if (search.trim()) q = q.or(`name.ilike.%${search.trim()}%,phone.ilike.%${search.trim()}%`)
     const { data, error } = await q
     if (error) toast.error('Lỗi tải nhà cung cấp')
@@ -274,7 +274,7 @@ export default function SuppliersPage() {
                     <TableBody>
                       {unpaidStockIns.map((si) => (
                         <TableRow key={si.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openSiDetail(si.id)}>
-                          <TableCell className="text-sm">{new Date(si.created_at).toLocaleDateString('vi-VN')}</TableCell>
+                          <TableCell className="text-sm">{formatVNDate(si.created_at)}</TableCell>
                           <TableCell className="text-right">{formatVN(si.total_amount)}</TableCell>
                           <TableCell className="text-right">{formatVN(si.amount_paid)}</TableCell>
                           <TableCell className="text-right font-medium text-red-600">{formatVN(si.total_amount - si.amount_paid)}</TableCell>
@@ -338,7 +338,7 @@ export default function SuppliersPage() {
                       rem -= alloc
                       return (
                         <div key={si.id} className="flex justify-between">
-                          <span className="text-muted-foreground">{new Date(si.created_at).toLocaleDateString('vi-VN')} (nợ {formatVN(debt)})</span>
+                          <span className="text-muted-foreground">{formatVNDate(si.created_at)} (nợ {formatVN(debt)})</span>
                           <span className="font-medium text-green-600">→ {formatVN(alloc)}{alloc >= debt ? <Badge className="ml-1 bg-green-600 text-white text-[10px] px-1">Tất toán</Badge> : ''}</span>
                         </div>
                       )

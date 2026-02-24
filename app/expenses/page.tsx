@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Receipt, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
-import { formatVN } from '@/lib/utils'
+import { formatVN, formatVNDate } from '@/lib/utils'
 
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Tiền mặt' },
@@ -93,6 +93,7 @@ export default function ExpensesPage() {
       .select('id, amount, payment_method, note, created_at, expense_categories(name), sales(customer_name)')
       .eq('warehouse_id', warehouseId)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
     if (filterCategory !== 'ALL') q = q.eq('category_id', filterCategory)
     if (filterMethod !== 'ALL') q = q.eq('payment_method', filterMethod)
     if (startDate) q = q.gte('created_at', `${startDate}T00:00:00+07:00`)
@@ -239,7 +240,7 @@ export default function ExpensesPage() {
                 <TableBody>
                   {filteredRecords.map((r) => (
                     <TableRow key={r.id}>
-                      <TableCell className="text-sm">{new Date(r.created_at).toLocaleDateString('vi-VN')}</TableCell>
+                      <TableCell className="text-sm">{formatVNDate(r.created_at)}</TableCell>
                       <TableCell>
                         {r.expense_categories?.name
                           ? <Badge variant="secondary">{r.expense_categories.name}</Badge>

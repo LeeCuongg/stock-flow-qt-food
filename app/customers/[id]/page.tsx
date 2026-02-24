@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ArrowLeft, Pencil, Phone, MapPin, FileText, Package, Check, X, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, formatVNDate } from '@/lib/utils'
 
 interface Customer {
   id: string; name: string; phone: string | null; address: string | null; note: string | null; created_at: string
@@ -180,7 +180,7 @@ export default function CustomerDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">Ngày tạo:</span>
-              <span>{new Date(customer.created_at).toLocaleDateString('vi-VN')}</span>
+              <span>{formatVNDate(customer.created_at)}</span>
             </div>
           </div>
         </CardContent>
@@ -241,7 +241,7 @@ export default function CustomerDetailPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground text-sm">
-                      {new Date(p.updated_at).toLocaleDateString('vi-VN')}
+                      {formatVNDate(p.updated_at)}
                     </TableCell>
                     <TableCell className="text-right">
                       {editingPriceId === p.id ? (

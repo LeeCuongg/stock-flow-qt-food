@@ -19,8 +19,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Plus, Pencil, Trash2, Search, Tags } from 'lucide-react'
 import { toast } from 'sonner'
-
-interface Category {
+import { formatVNDate } from '@/lib/utils'
   id: string
   warehouse_id: string
   name: string
@@ -160,7 +159,7 @@ export default function CategoriesPage() {
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{c.name}</TableCell>
                     <TableCell className="text-muted-foreground">{c.description || '-'}</TableCell>
-                    <TableCell className="text-sm">{new Date(c.created_at).toLocaleDateString('vi-VN')}</TableCell>
+                    <TableCell className="text-sm">{formatVNDate(c.created_at)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>

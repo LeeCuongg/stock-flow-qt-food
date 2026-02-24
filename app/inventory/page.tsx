@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Search, Warehouse, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatQty } from '@/lib/utils'
+import { formatQty, formatVNDate } from '@/lib/utils'
 
 interface InventoryBatch {
   id: string
@@ -145,12 +145,12 @@ export default function InventoryPage() {
                       </TableCell>
                       <TableCell>
                         {batch.manufactured_date
-                          ? new Date(batch.manufactured_date).toLocaleDateString('vi-VN')
+                          ? formatVNDate(batch.manufactured_date)
                           : '-'}
                       </TableCell>
                       <TableCell>
                         {batch.expiry_date
-                          ? new Date(batch.expiry_date).toLocaleDateString('vi-VN')
+                          ? formatVNDate(batch.expiry_date)
                           : '-'}
                       </TableCell>
                       <TableCell>{expiryBadge(status)}</TableCell>

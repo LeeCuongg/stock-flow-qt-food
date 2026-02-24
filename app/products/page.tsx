@@ -90,6 +90,7 @@ export default function ProductsPage() {
       .from('products')
       .select('*, product_categories(name)')
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
     if (search.trim()) {
       query = query.or(`name.ilike.%${search.trim()}%,sku.ilike.%${search.trim()}%`)
     }

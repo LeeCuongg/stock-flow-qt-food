@@ -16,7 +16,7 @@ import { Plus, Trash2, Search, UserCheck, CreditCard } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, formatVNDate } from '@/lib/utils'
 
 interface Customer { id: string; name: string; phone: string | null; address: string | null; note: string | null; created_at: string }
 interface UnpaidSale { id: string; created_at: string; total_revenue: number; amount_paid: number; customer_name: string | null }
@@ -63,7 +63,7 @@ export default function CustomersPage() {
 
   const load = useCallback(async () => {
     setIsLoading(true)
-    let q = supabase.from('customers').select('*').order('created_at', { ascending: false })
+    let q = supabase.from('customers').select('*').order('created_at', { ascending: false }).order('id', { ascending: false })
     if (search.trim()) q = q.or(`name.ilike.%${search.trim()}%,phone.ilike.%${search.trim()}%`)
     const { data, error } = await q
     if (error) toast.error('Lỗi tải khách hàng')
@@ -275,7 +275,7 @@ export default function CustomersPage() {
                     <TableBody>
                       {unpaidSales.map((s) => (
                         <TableRow key={s.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openSaleDetail(s.id)}>
-                          <TableCell className="text-sm">{new Date(s.created_at).toLocaleDateString('vi-VN')}</TableCell>
+                          <TableCell className="text-sm">{formatVNDate(s.created_at)}</TableCell>
                           <TableCell className="text-right">{formatVN(s.total_revenue)}</TableCell>
                           <TableCell className="text-right">{formatVN(s.amount_paid)}</TableCell>
                           <TableCell className="text-right font-medium text-orange-600">{formatVN(s.total_revenue - s.amount_paid)}</TableCell>
@@ -339,7 +339,7 @@ export default function CustomersPage() {
                       rem -= alloc
                       return (
                         <div key={s.id} className="flex justify-between">
-                          <span className="text-muted-foreground">{new Date(s.created_at).toLocaleDateString('vi-VN')} (nợ {formatVN(debt)})</span>
+                          <span className="text-muted-foreground">{formatVNDate(s.created_at)} (nợ {formatVN(debt)})</span>
                           <span className="font-medium text-green-600">→ {formatVN(alloc)}{alloc >= debt ? <Badge className="ml-1 bg-green-600 text-white text-[10px] px-1">Tất toán</Badge> : ''}</span>
                         </div>
                       )

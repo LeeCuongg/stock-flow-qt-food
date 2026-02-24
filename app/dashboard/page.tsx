@@ -27,8 +27,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-
-// ── Interfaces ──
+import { formatVNDate } from '@/lib/utils'
 interface Summary {
   revenue_total: number; cost_total: number; profit_total: number; loss_total: number
 }
@@ -57,7 +56,7 @@ interface ProductInventoryReport {
 }
 
 // ── Helpers ──
-function formatDate(d: Date): string { return d.toISOString().split('T')[0] }
+function formatDate(d: Date): string { return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }) }
 // Format tiền: luôn số nguyên (110.234)
 function formatVN(n: number): string { return Math.round(Number(n)).toLocaleString('vi-VN') }
 // Format số lượng: giữ lẻ nếu có (4,326 hoặc 0.5)
@@ -98,7 +97,7 @@ const DATE_PRESETS = [
 
 function getPresetDateRange(preset: string): { from: string; to: string } {
   const today = new Date()
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
+  const fmt = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
   const todayStr = fmt(today)
   switch (preset) {
     case 'today': return { from: todayStr, to: todayStr }
@@ -1057,7 +1056,7 @@ export default function DashboardPage() {
                         }>
                           <TableCell className="font-medium">{b.product_name}</TableCell>
                           <TableCell className="font-mono text-xs">{b.batch_code || '-'}</TableCell>
-                          <TableCell>{new Date(b.expired_date).toLocaleDateString('vi-VN')}</TableCell>
+                          <TableCell>{formatVNDate(b.expired_date)}</TableCell>
                           <TableCell className="text-right">{formatQty(b.quantity_remaining)}</TableCell>
                           <TableCell>
                             {status === 'expired' ? (

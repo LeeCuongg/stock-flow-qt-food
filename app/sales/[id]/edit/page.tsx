@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, formatVNDate } from '@/lib/utils'
 
 interface Customer { id: string; name: string }
 interface Product { id: string; name: string; sku: string | null; unit: string; default_sale_price: number }
@@ -285,7 +285,7 @@ export default function SaleEditPage() {
                     <div className="flex items-center gap-3">
                       <Badge variant="outline" className="font-mono text-xs">{batch.batch_code || '-'}</Badge>
                       <span className="text-sm">Tồn: <span className="font-medium">{formatQty(batch.quantity_remaining)}</span></span>
-                      {batch.expiry_date && <span className="text-xs text-muted-foreground">HSD: {new Date(batch.expiry_date).toLocaleDateString('vi-VN')}</span>}
+                      {batch.expiry_date && <span className="text-xs text-muted-foreground">HSD: {formatVNDate(batch.expiry_date)}</span>}
                     </div>
                     <Button variant="ghost" size="sm" type="button"><Plus className="h-4 w-4" /></Button>
                   </div>

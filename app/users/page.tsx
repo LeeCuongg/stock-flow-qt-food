@@ -27,8 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Shield, User } from 'lucide-react'
-
-interface UserProfile {
+import { formatVNDate } from '@/lib/utils'
   id: string
   full_name: string | null
   role: string
@@ -180,7 +179,7 @@ export default function UsersPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {new Date(user.created_at).toLocaleDateString('vi-VN')}
+                      {formatVNDate(user.created_at)}
                     </TableCell>
                     <TableCell>
                       <Select

@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
+import { vnToday } from "@/lib/utils"
 
 interface SaleBatchDetail {
   id: string
@@ -178,7 +179,7 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
         heightLeft -= pdfH
       }
 
-      pdf.save(`phieu-xuat-${details.id.slice(0, 8)}-${new Date().toISOString().split('T')[0]}.pdf`)
+      pdf.save(`phieu-xuat-${details.id.slice(0, 8)}-${vnToday()}.pdf`)
       toast.success("Đã tải xuống file PDF")
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Lỗi tạo PDF, thử dùng In thay thế.")

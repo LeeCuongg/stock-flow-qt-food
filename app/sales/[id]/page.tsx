@@ -21,7 +21,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft, Pencil, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, formatVNDate } from '@/lib/utils'
 
 interface SaleDetail {
   id: string

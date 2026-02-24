@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Plus, AlertTriangle, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatVN, formatQty } from '@/lib/utils'
+import { formatVN, formatQty, formatVNDate } from '@/lib/utils'
 
 const LOSS_REASONS = [
   { value: 'EXPIRED', label: 'Hết hạn' },
@@ -98,6 +98,7 @@ export default function LossPage() {
       .from('loss_records')
       .select('id, quantity, reason, note, cost_price, total_loss_cost, status, created_at, products(name, sku, unit), inventory_batches(batch_code, expiry_date)')
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
     if (error) toast.error('Lỗi tải dữ liệu hao hụt')
     else setRecords((data as unknown as LossRecord[]) || [])
     setIsLoading(false)
@@ -306,12 +307,12 @@ export default function LossPage() {
                     className={`cursor-pointer ${r.status === 'CANCELLED' ? 'opacity-50' : ''}`}
                     onClick={() => { setDetailRecord(r); setDetailOpen(true) }}
                   >
-                    <TableCell className="text-sm">{new Date(r.created_at).toLocaleDateString('vi-VN')}</TableCell>
+                    <TableCell className="text-sm">{formatVNDate(r.created_at)}</TableCell>
                     <TableCell className="font-medium">{r.products?.name || '-'}</TableCell>
                     <TableCell className="font-mono text-xs">{r.inventory_batches?.batch_code || '-'}</TableCell>
                     <TableCell className="text-sm">
                       {r.inventory_batches?.expiry_date
-                        ? new Date(r.inventory_batches.expiry_date).toLocaleDateString('vi-VN')
+                        ? formatVNDate(r.inventory_batches.expiry_date)
                         : '-'}
                     </TableCell>
                     <TableCell className="text-right">{formatQty(r.quantity)}</TableCell>
@@ -350,7 +351,7 @@ export default function LossPage() {
                 <div><span className="text-muted-foreground">Sản phẩm:</span><br/><span className="font-medium">{detailRecord.products?.name || '-'}</span></div>
                 <div><span className="text-muted-foreground">Đơn vị:</span><br/>{detailRecord.products?.unit || '-'}</div>
                 <div><span className="text-muted-foreground">Mã lô:</span><br/><span className="font-mono">{detailRecord.inventory_batches?.batch_code || '-'}</span></div>
-                <div><span className="text-muted-foreground">HSD:</span><br/>{detailRecord.inventory_batches?.expiry_date ? new Date(detailRecord.inventory_batches.expiry_date).toLocaleDateString('vi-VN') : '-'}</div>
+                <div><span className="text-muted-foreground">HSD:</span><br/>{detailRecord.inventory_batches?.expiry_date ? formatVNDate(detailRecord.inventory_batches.expiry_date) : '-'}</div>
                 <div><span className="text-muted-foreground">Số lượng:</span><br/><span className="font-medium">{formatQty(detailRecord.quantity)}</span></div>
                 <div><span className="text-muted-foreground">Lý do:</span><br/><Badge variant={reasonBadgeVariant(detailRecord.reason)}>{reasonLabel(detailRecord.reason)}</Badge></div>
                 <div><span className="text-muted-foreground">Giá vốn:</span><br/>{formatVN(detailRecord.cost_price)} VND</div>
@@ -454,7 +455,7 @@ export default function LossPage() {
                       {batchesForProduct(selectedProductId).map((b) => (
                         <SelectItem key={b.id} value={b.id}>
                           {b.batch_code || '-'} — Tồn: {formatQty(b.quantity_remaining)}
-                          {b.expiry_date ? ` — HSD: ${new Date(b.expiry_date).toLocaleDateString('vi-VN')}` : ''}
+                          {b.expiry_date ? ` — HSD: ${formatVNDate(b.expiry_date)}` : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -477,7 +478,7 @@ export default function LossPage() {
                 {selectedBatch.expiry_date && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Hạn sử dụng:</span>
-                    <span>{new Date(selectedBatch.expiry_date).toLocaleDateString('vi-VN')}</span>
+                    <span>{formatVNDate(selectedBatch.expiry_date)}</span>
                   </div>
                 )}
               </div>

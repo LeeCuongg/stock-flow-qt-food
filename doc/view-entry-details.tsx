@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button"
 import { Download, Printer, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { formatDateOnlyVN, formatDateTimeVN } from "@/lib/utils/date-utils"
+import { formatVNDate } from "@/lib/utils"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 
@@ -219,7 +219,7 @@ export function ViewEntryDetails({ open, onClose, batchId }: ViewEntryDetailsPro
         heightLeft -= pdfHeight
       }
       
-      const fileName = `phieu-nhap-${details.batch_id}-${new Date().toISOString().split('T')[0]}.pdf`
+      const fileName = `phieu-nhap-${details.batch_id}-${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })}.pdf`
       pdf.save(fileName)
       
       toast({ title: "Thành công", description: "Đã tải xuống file PDF" })
@@ -239,8 +239,8 @@ export function ViewEntryDetails({ open, onClose, batchId }: ViewEntryDetailsPro
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return ""
     try {
-      if (isDateOnly(dateStr)) return formatDateOnlyVN(new Date(dateStr))
-      return formatDateTimeVN(new Date(dateStr))
+      if (isDateOnly(dateStr)) return formatVNDate(dateStr)
+      return new Date(dateStr).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
     } catch {
       return dateStr
     }
@@ -460,7 +460,7 @@ export function ViewEntryDetails({ open, onClose, batchId }: ViewEntryDetailsPro
 
             {/* Print timestamp */}
             <div className="mt-6 text-center text-xs text-gray-500 print:block hidden">
-              <p>In ngày: {formatDateTimeVN(new Date())}</p>
+              <p>In ngày: {new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</p>
             </div>
           </div>
         ) : (
