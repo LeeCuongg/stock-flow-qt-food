@@ -17,6 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Plus, Trash2, ShoppingCart, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -145,7 +146,6 @@ export default function SalesPage() {
   const [createdDate, setCreatedDate] = useState(new Date().toISOString().split('T')[0])
   const [items, setItems] = useState<SaleItem[]>([])
   const [selectedProductId, setSelectedProductId] = useState('')
-  const [productSearch, setProductSearch] = useState('')
   // Adjustments in create dialog
   const [createAdjustments, setCreateAdjustments] = useState<{ type: string; amount: number; note: string }[]>([])
   // Payment modal
@@ -242,12 +242,6 @@ export default function SalesPage() {
     }
   }, [])
 
-  const filteredProducts = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-      (p.sku && p.sku.toLowerCase().includes(productSearch.toLowerCase()))
-  )
-
   // Batches for a selected product (only those with remaining > 0)
   const batchesForProduct = (productId: string) =>
     batches.filter((b) => b.product_id === productId && b.quantity_remaining > 0)
@@ -261,7 +255,6 @@ export default function SalesPage() {
     setCreatedDate(new Date().toISOString().split('T')[0])
     setItems([])
     setSelectedProductId('')
-    setProductSearch('')
     setCreateAdjustments([])
     setDialogOpen(true)
     loadBatches()
@@ -522,15 +515,14 @@ export default function SalesPage() {
             )}
             <div className="grid gap-1">
               <Label className="text-xs text-muted-foreground">Khách hàng</Label>
-              <Select value={filterCustomerId} onValueChange={(val) => setFilterCustomerId(val === 'all' ? '' : val)}>
-                <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="Tất cả" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả</SelectItem>
-                  {customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[{ value: 'all', label: 'Tất cả' }, ...customers.map((c) => ({ value: c.id, label: c.name }))]}
+                value={filterCustomerId || 'all'}
+                onValueChange={(val) => setFilterCustomerId(val === 'all' ? '' : val)}
+                placeholder="Tất cả"
+                searchPlaceholder="Tìm khách hàng..."
+                triggerClassName="w-[180px] h-9"
+              />
             </div>
             <div className="grid gap-1">
               <Label className="text-xs text-muted-foreground">Trạng thái TT</Label>
@@ -661,26 +653,24 @@ export default function SalesPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Khách hàng *</Label>
-                <Select value={selectedCustomerId} onValueChange={(val) => {
-                  if (val === 'none') {
-                    setSelectedCustomerId('')
-                    setCustomerName('')
-                    setCustomerPrices({})
-                  } else {
-                    setSelectedCustomerId(val)
-                    const c = customers.find((c) => c.id === val)
-                    if (c) setCustomerName(c.name)
-                    loadCustomerPrices(val)
-                  }
-                }}>
-                  <SelectTrigger><SelectValue placeholder="Chọn khách hàng..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">-- Nhập tay --</SelectItem>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={[{ value: 'none', label: '-- Nhập tay --' }, ...customers.map((c) => ({ value: c.id, label: c.name }))]}
+                  value={selectedCustomerId || 'none'}
+                  onValueChange={(val) => {
+                    if (val === 'none') {
+                      setSelectedCustomerId('')
+                      setCustomerName('')
+                      setCustomerPrices({})
+                    } else {
+                      setSelectedCustomerId(val)
+                      const c = customers.find((c) => c.id === val)
+                      if (c) setCustomerName(c.name)
+                      loadCustomerPrices(val)
+                    }
+                  }}
+                  placeholder="Chọn khách hàng..."
+                  searchPlaceholder="Tìm khách hàng..."
+                />
                 {!selectedCustomerId && (
                   <>
                     <Input
@@ -717,25 +707,14 @@ export default function SalesPage() {
             {/* Step 1: Select product */}
             <div className="grid gap-2">
               <Label>Chọn sản phẩm</Label>
-              <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn sản phẩm..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <div className="p-2">
-                    <Input placeholder="Tìm sản phẩm..." value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)} className="mb-2" />
-                  </div>
-                  {filteredProducts.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} {p.sku ? `(${p.sku})` : ''} - {p.unit}
-                    </SelectItem>
-                  ))}
-                  {filteredProducts.length === 0 && (
-                    <div className="p-2 text-sm text-muted-foreground text-center">Không tìm thấy</div>
-                  )}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={products.map((p) => ({ value: p.id, label: `${p.name} ${p.sku ? `(${p.sku})` : ''} - ${p.unit}` }))}
+                value={selectedProductId}
+                onValueChange={setSelectedProductId}
+                placeholder="Chọn sản phẩm..."
+                searchPlaceholder="Tìm sản phẩm..."
+                emptyText="Không tìm thấy"
+              />
             </div>
 
             {/* Step 2: Select batch for chosen product */}
@@ -824,8 +803,13 @@ export default function SalesPage() {
                             <div className="grid grid-cols-2 gap-3">
                               <div className="grid gap-1">
                                 <Label className="text-xs text-muted-foreground">Số lượng * (tối đa {item.batch_remaining})</Label>
-                                <Input type="number" min={1} max={item.batch_remaining} value={item.quantity}
-                                  onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} />
+                                <Input type="text" inputMode="decimal" value={item.quantity}
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(',', '.')
+                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                      updateItem(idx, 'quantity', val === '' ? 0 : val.endsWith('.') ? val : Number(val))
+                                    }
+                                  }} />
                               </div>
                               <div className="grid gap-1">
                                 <Label className="text-xs text-muted-foreground">Giá bán *</Label>

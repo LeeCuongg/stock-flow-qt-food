@@ -17,6 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Plus, Trash2, PackagePlus, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -130,7 +131,6 @@ export default function StockInPage() {
   const [note, setNote] = useState('')
   const [createdDate, setCreatedDate] = useState(new Date().toISOString().split('T')[0])
   const [items, setItems] = useState<StockInItem[]>([])
-  const [productSearch, setProductSearch] = useState('')
   // Payment modal
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payingRecord, setPayingRecord] = useState<StockInRecord | null>(null)
@@ -219,12 +219,6 @@ export default function StockInPage() {
     }
   }, [])
 
-  const filteredProducts = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-      (p.sku && p.sku.toLowerCase().includes(productSearch.toLowerCase()))
-  )
-
   const openCreate = () => {
     setSupplierName('')
     setSupplierPhone('')
@@ -233,7 +227,6 @@ export default function StockInPage() {
     setNote('')
     setCreatedDate(new Date().toISOString().split('T')[0])
     setItems([])
-    setProductSearch('')
     setLandedCostEntries([])
     setDialogOpen(true)
   }
@@ -271,7 +264,6 @@ export default function StockInPage() {
         note: '',
       },
     ])
-    setProductSearch('')
   }
 
   const updateItem = (index: number, field: keyof StockInItem, value: string | number) => {
@@ -493,15 +485,14 @@ export default function StockInPage() {
             )}
             <div className="grid gap-1">
               <Label className="text-xs text-muted-foreground">Nhà cung cấp</Label>
-              <Select value={filterSupplierId} onValueChange={(val) => setFilterSupplierId(val === 'all' ? '' : val)}>
-                <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="Tất cả" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả</SelectItem>
-                  {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[{ value: 'all', label: 'Tất cả' }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]}
+                value={filterSupplierId || 'all'}
+                onValueChange={(val) => setFilterSupplierId(val === 'all' ? '' : val)}
+                placeholder="Tất cả"
+                searchPlaceholder="Tìm NCC..."
+                triggerClassName="w-[180px] h-9"
+              />
             </div>
             <div className="grid gap-1">
               <Label className="text-xs text-muted-foreground">Trạng thái TT</Label>
@@ -634,26 +625,24 @@ export default function StockInPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Nhà cung cấp *</Label>
-                <Select value={selectedSupplierId} onValueChange={(val) => {
-                  if (val === 'none') {
-                    setSelectedSupplierId('')
-                    setSupplierName('')
-                    setSupplierPrices({})
-                  } else {
-                    setSelectedSupplierId(val)
-                    const s = suppliers.find((s) => s.id === val)
-                    if (s) setSupplierName(s.name)
-                    loadSupplierPrices(val)
-                  }
-                }}>
-                  <SelectTrigger><SelectValue placeholder="Chọn NCC..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">-- Nhập tay --</SelectItem>
-                    {suppliers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={[{ value: 'none', label: '-- Nhập tay --' }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]}
+                  value={selectedSupplierId || 'none'}
+                  onValueChange={(val) => {
+                    if (val === 'none') {
+                      setSelectedSupplierId('')
+                      setSupplierName('')
+                      setSupplierPrices({})
+                    } else {
+                      setSelectedSupplierId(val)
+                      const s = suppliers.find((s) => s.id === val)
+                      if (s) setSupplierName(s.name)
+                      loadSupplierPrices(val)
+                    }
+                  }}
+                  placeholder="Chọn NCC..."
+                  searchPlaceholder="Tìm nhà cung cấp..."
+                />
                 {!selectedSupplierId && (
                   <>
                     <Input
@@ -690,35 +679,17 @@ export default function StockInPage() {
             {/* Product search & add */}
             <div className="grid gap-2">
               <Label>Thêm sản phẩm</Label>
-              <Select
+              <SearchableSelect
+                options={products.map((p) => ({ value: p.id, label: `${p.name} ${p.sku ? `(${p.sku})` : ''} - ${p.unit}` }))}
                 value=""
                 onValueChange={(val) => {
                   const product = products.find((p) => p.id === val)
                   if (product) addItem(product)
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn sản phẩm..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <div className="p-2">
-                    <Input
-                      placeholder="Tìm sản phẩm..."
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                      className="mb-2"
-                    />
-                  </div>
-                  {filteredProducts.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} {p.sku ? `(${p.sku})` : ''} - {p.unit}
-                    </SelectItem>
-                  ))}
-                  {filteredProducts.length === 0 && (
-                    <div className="p-2 text-sm text-muted-foreground text-center">Không tìm thấy</div>
-                  )}
-                </SelectContent>
-              </Select>
+                placeholder="Chọn sản phẩm..."
+                searchPlaceholder="Tìm sản phẩm..."
+                emptyText="Không tìm thấy"
+              />
             </div>
 
             {/* Items as cards */}

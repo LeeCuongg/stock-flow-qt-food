@@ -14,6 +14,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -246,13 +247,13 @@ export default function StockInEditPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>Nhà cung cấp</Label>
-              <Select value={selectedSupplierId || 'none'} onValueChange={(v) => setSelectedSupplierId(v === 'none' ? '' : v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">-- Không chọn --</SelectItem>
-                  {suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[{ value: 'none', label: '-- Không chọn --' }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]}
+                value={selectedSupplierId || 'none'}
+                onValueChange={(v) => setSelectedSupplierId(v === 'none' ? '' : v)}
+                placeholder="Chọn NCC..."
+                searchPlaceholder="Tìm nhà cung cấp..."
+              />
             </div>
             <div className="grid gap-2">
               <Label>Ghi chú</Label>

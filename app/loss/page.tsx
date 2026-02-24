@@ -17,6 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Plus, AlertTriangle, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatVN, formatQty } from '@/lib/utils'
@@ -76,7 +77,6 @@ export default function LossPage() {
   const [quantity, setQuantity] = useState(1)
   const [reason, setReason] = useState('')
   const [note, setNote] = useState('')
-  const [productSearch, setProductSearch] = useState('')
   const [inputMode, setInputMode] = useState<'loss' | 'remaining'>('loss')
   const [remainingQty, setRemainingQty] = useState(0)
 
@@ -123,12 +123,6 @@ export default function LossPage() {
     loadBatches()
   }, [loadRecords, loadProducts, loadBatches])
 
-  const filteredProducts = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-      (p.sku && p.sku.toLowerCase().includes(productSearch.toLowerCase()))
-  )
-
   const batchesForProduct = (productId: string) =>
     batches.filter((b) => b.product_id === productId && b.quantity_remaining > 0)
 
@@ -156,7 +150,6 @@ export default function LossPage() {
     setQuantity(1)
     setReason('')
     setNote('')
-    setProductSearch('')
     setInputMode('loss')
     setRemainingQty(0)
     setDialogOpen(true)
@@ -433,28 +426,17 @@ export default function LossPage() {
             {/* Select product */}
             <div className="grid gap-2">
               <Label>Sản phẩm *</Label>
-              <Select value={selectedProductId} onValueChange={(val) => {
-                setSelectedProductId(val)
-                setSelectedBatchId('')
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn sản phẩm..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <div className="p-2">
-                    <Input placeholder="Tìm sản phẩm..." value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)} className="mb-2" />
-                  </div>
-                  {filteredProducts.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} {p.sku ? `(${p.sku})` : ''} - {p.unit}
-                    </SelectItem>
-                  ))}
-                  {filteredProducts.length === 0 && (
-                    <div className="p-2 text-sm text-muted-foreground text-center">Không tìm thấy</div>
-                  )}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={products.map((p) => ({ value: p.id, label: `${p.name} ${p.sku ? `(${p.sku})` : ''} - ${p.unit}` }))}
+                value={selectedProductId}
+                onValueChange={(val) => {
+                  setSelectedProductId(val)
+                  setSelectedBatchId('')
+                }}
+                placeholder="Chọn sản phẩm..."
+                searchPlaceholder="Tìm sản phẩm..."
+                emptyText="Không tìm thấy"
+              />
             </div>
 
             {/* Select batch */}
