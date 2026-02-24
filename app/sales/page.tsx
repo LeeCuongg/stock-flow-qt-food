@@ -803,13 +803,8 @@ export default function SalesPage() {
                             <div className="grid grid-cols-2 gap-3">
                               <div className="grid gap-1">
                                 <Label className="text-xs text-muted-foreground">Số lượng * (tối đa {item.batch_remaining})</Label>
-                                <Input type="text" inputMode="decimal" value={item.quantity}
-                                  onChange={(e) => {
-                                    const val = e.target.value.replace(',', '.')
-                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                      updateItem(idx, 'quantity', val === '' ? 0 : val.endsWith('.') ? val : Number(val))
-                                    }
-                                  }} />
+                                <Input type="number" min={1} max={item.batch_remaining} value={item.quantity}
+                                  onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} />
                               </div>
                               <div className="grid gap-1">
                                 <Label className="text-xs text-muted-foreground">Giá bán *</Label>

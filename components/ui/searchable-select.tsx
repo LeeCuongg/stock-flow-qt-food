@@ -65,8 +65,11 @@ export function SearchableSelect({
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList
-            className="max-h-[200px] overflow-y-auto"
+            className="max-h-[200px] overflow-y-auto overscroll-contain touch-pan-y"
             onWheel={(e) => {
+              e.stopPropagation()
+            }}
+            onTouchMove={(e) => {
               e.stopPropagation()
             }}
           >
