@@ -258,24 +258,24 @@ export default function StockInDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Sản phẩm</TableHead>
-                    <TableHead>Mã lô</TableHead>
-                    <TableHead>HSD</TableHead>
                     <TableHead className="text-right">SL</TableHead>
                     <TableHead className="text-right">Đơn giá</TableHead>
                     <TableHead className="text-right">Thành tiền</TableHead>
                     <TableHead>Ghi chú</TableHead>
+                    <TableHead>HSD</TableHead>
+                    <TableHead>Mã lô</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {detail.stock_in_items.map((item, i) => (
                     <TableRow key={i}>
                       <TableCell className="font-medium">{item.products?.name || '-'}</TableCell>
-                      <TableCell className="font-mono text-xs">{item.batch_code || '-'}</TableCell>
-                      <TableCell className="text-sm">{item.expired_date ? formatVNDate(item.expired_date) : '-'}</TableCell>
                       <TableCell className="text-right">{formatQty(item.quantity)}</TableCell>
                       <TableCell className="text-right">{formatVN(item.cost_price)}</TableCell>
                       <TableCell className="text-right font-medium">{formatVN(item.total_price)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{item.note || ''}</TableCell>
+                      <TableCell className="text-sm">{item.expired_date ? formatVNDate(item.expired_date) : '-'}</TableCell>
+                      <TableCell className="font-mono text-xs">{item.batch_code || '-'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

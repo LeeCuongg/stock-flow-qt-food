@@ -221,24 +221,24 @@ export default function SaleDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Sản phẩm</TableHead>
-                    <TableHead>Mã lô</TableHead>
                     <TableHead className="text-right">SL</TableHead>
                     <TableHead className="text-right">Giá bán</TableHead>
-                    <TableHead className="text-right">Giá vốn</TableHead>
                     <TableHead className="text-right">Thành tiền</TableHead>
+                    <TableHead className="text-right">Giá vốn</TableHead>
                     <TableHead>Ghi chú</TableHead>
+                    <TableHead>Mã lô</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {detail.sales_items.map((item, i) => (
                     <TableRow key={i}>
                       <TableCell className="font-medium">{item.products?.name || '-'} <span className="text-xs text-muted-foreground">({item.products?.unit})</span></TableCell>
-                      <TableCell className="font-mono text-xs">{item.inventory_batches?.batch_code || '-'}</TableCell>
                       <TableCell className="text-right">{formatQty(item.quantity)}</TableCell>
                       <TableCell className="text-right">{formatVN(item.sale_price)}</TableCell>
-                      <TableCell className="text-right">{formatVN(item.cost_price)}</TableCell>
                       <TableCell className="text-right font-medium">{formatVN(item.total_price)}</TableCell>
+                      <TableCell className="text-right">{formatVN(item.cost_price)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{item.note || ''}</TableCell>
+                      <TableCell className="font-mono text-xs">{item.inventory_batches?.batch_code || '-'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

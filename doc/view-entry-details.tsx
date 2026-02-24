@@ -7,7 +7,6 @@ import { Download, Printer, Loader2, Copy, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatVNDate } from "@/lib/utils"
 import jsPDF from "jspdf"
-import html2canvas from "html2canvas"
 import { toPng } from "html-to-image"
 
 interface BatchDetail {
@@ -171,107 +170,66 @@ export function ViewEntryDetails({ open, onClose, batchId }: ViewEntryDetailsPro
 
   const handleDownloadPDF = async () => {
     if (!printRef.current || !details) {
-      toast({
-        title: "Lỗi",
-        description: "Chưa có dữ liệu để tạo PDF",
-        variant: "destructive",
-      })
+      toast({ title: "Lỗi", description: "Chưa có dữ liệu để tạo PDF", variant: "destructive" })
       return
     }
-    
     setDownloading(true)
-    
     try {
       const element = printRef.current
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
+
       const dialogContent = element.closest('.overflow-y-auto')
-      const originalOverflow = dialogContent ? (dialogContent as HTMLElement).style.overflow : null
-      const originalMaxHeight = dialogContent ? (dialogContent as HTMLElement).style.maxHeight : null
-      const originalWidth = element.style.width
-      const originalMaxWidth = element.style.maxWidth
-      
+      const origOverflow = dialogContent ? (dialogContent as HTMLElement).style.overflow : null
+      const origMaxH = dialogContent ? (dialogContent as HTMLElement).style.maxHeight : null
+
       if (dialogContent instanceof HTMLElement) {
         dialogContent.style.overflow = 'visible'
         dialogContent.style.maxHeight = 'none'
       }
-      
-      element.style.width = 'auto'
-      element.style.maxWidth = 'none'
-      element.style.minWidth = '640px'
+
+      const origPadding = element.style.padding
+      const origFont = element.style.fontFamily
+      element.style.padding = '24px'
+      element.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
       element.offsetHeight
-      
-      const elementWidth = element.offsetWidth
-      const elementHeight = element.offsetHeight
-      
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
+
+      const dataUrl = await toPng(element, {
+        pixelRatio: 2,
         backgroundColor: '#ffffff',
-        width: elementWidth,
-        height: elementHeight,
-        windowWidth: elementWidth,
-        windowHeight: elementHeight,
-        onclone: (clonedDoc) => {
-          const rootStyle = getComputedStyle(document.documentElement)
-          const cssVarNames = [
-            'background','foreground','card','card-foreground','popover','popover-foreground',
-            'primary','primary-foreground','secondary','secondary-foreground','muted','muted-foreground',
-            'accent','accent-foreground','destructive','destructive-foreground','border','input','ring',
-          ]
-          const vars = cssVarNames
-            .map(name => { const v = rootStyle.getPropertyValue(`--${name}`).trim(); return v ? `--${name}: ${v};` : '' })
-            .filter(Boolean).join('\n  ')
-          const overrideStyle = clonedDoc.createElement('style')
-          overrideStyle.textContent = `:root { ${vars} }`
-          clonedDoc.head.appendChild(overrideStyle)
-        }
       })
-      
+
+      element.style.padding = origPadding
+      element.style.fontFamily = origFont
       if (dialogContent instanceof HTMLElement) {
-        dialogContent.style.overflow = originalOverflow || ''
-        dialogContent.style.maxHeight = originalMaxHeight || ''
+        dialogContent.style.overflow = origOverflow || ''
+        dialogContent.style.maxHeight = origMaxH || ''
       }
-      element.style.width = originalWidth || ''
-      element.style.maxWidth = originalMaxWidth || ''
-      
-      if (!canvas || canvas.width === 0 || canvas.height === 0) {
-        throw new Error("Canvas rendering failed")
-      }
-      
-      const imgData = canvas.toDataURL('image/png')
+
+      const img = new Image()
+      img.src = dataUrl
+      await new Promise((resolve) => { img.onload = resolve })
+
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      
-      const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = pdf.internal.pageSize.getHeight()
-      const imgWidth = pdfWidth
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width
-      
-      let heightLeft = imgHeight
+      const pdfW = pdf.internal.pageSize.getWidth()
+      const pdfH = pdf.internal.pageSize.getHeight()
+      const imgW = pdfW
+      const imgH = (img.height * pdfW) / img.width
+
+      let heightLeft = imgH
       let position = 0
-      
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pdfHeight
-      
+      pdf.addImage(dataUrl, 'PNG', 0, position, imgW, imgH)
+      heightLeft -= pdfH
       while (heightLeft > 0) {
-        position = heightLeft - imgHeight
+        position = heightLeft - imgH
         pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= pdfHeight
+        pdf.addImage(dataUrl, 'PNG', 0, position, imgW, imgH)
+        heightLeft -= pdfH
       }
-      
+
       const fileName = `phieu-nhap-${details.batch_id}-${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })}.pdf`
       pdf.save(fileName)
-      
       toast({ title: "Thành công", description: "Đã tải xuống file PDF" })
     } catch (error: any) {
-      toast({
-        title: "Lỗi tạo PDF",
-        description: error?.message || "Vui lòng thử dùng chức năng In thay thế.",
-        variant: "destructive",
-      })
+      toast({ title: "Lỗi tạo PDF", description: error?.message || "Vui lòng thử dùng chức năng In thay thế.", variant: "destructive" })
     } finally {
       setDownloading(false)
     }
@@ -473,8 +431,7 @@ export function ViewEntryDetails({ open, onClose, batchId }: ViewEntryDetailsPro
 
             {/* Summary */}
             <div className="border-t-2 border-gray-300 print:border-black pt-4">
-              <div className="flex justify-end">
-                <div className="w-full max-w-md space-y-2">
+              <div className="w-full space-y-2">
                   <div className="flex justify-between py-1">
                     <span className="text-sm font-medium">Tổng tiền hàng:</span>
                     <span className="text-sm font-medium">{formatCurrency(details.summary.merchandise_total)}</span>
@@ -501,7 +458,6 @@ export function ViewEntryDetails({ open, onClose, batchId }: ViewEntryDetailsPro
                       {details.summary.remaining > 0 ? formatCurrency(details.summary.remaining) : "Đã thanh toán đủ"}
                     </span>
                   </div>
-                </div>
               </div>
             </div>
 

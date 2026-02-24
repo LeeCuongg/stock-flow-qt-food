@@ -7,7 +7,6 @@ import { Download, Printer, Loader2, Copy, Check } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import jsPDF from "jspdf"
-import html2canvas from "html2canvas"
 import { toPng } from "html-to-image"
 import { vnToday } from "@/lib/utils"
 
@@ -172,7 +171,6 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
     setDownloading(true)
     try {
       const element = printRef.current
-      await new Promise(resolve => setTimeout(resolve, 100))
 
       const dialogContent = element.closest('.overflow-y-auto')
       const origOverflow = dialogContent ? (dialogContent as HTMLElement).style.overflow : null
@@ -183,54 +181,42 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
         dialogContent.style.maxHeight = 'none'
       }
 
-      element.style.width = 'auto'
-      element.style.maxWidth = 'none'
-      element.style.minWidth = '640px'
+      const origPadding = element.style.padding
+      const origFont = element.style.fontFamily
+      element.style.padding = '24px'
+      element.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
       element.offsetHeight
 
-      const canvas = await html2canvas(element, {
-        scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#ffffff',
-        width: element.offsetWidth, height: element.offsetHeight,
-        windowWidth: element.offsetWidth, windowHeight: element.offsetHeight,
-        onclone: (clonedDoc: Document) => {
-          // Override oklch variables with browser-computed RGB values for html2canvas
-          const rootStyle = getComputedStyle(document.documentElement)
-          const cssVarNames = [
-            'background','foreground','card','card-foreground','popover','popover-foreground',
-            'primary','primary-foreground','secondary','secondary-foreground','muted','muted-foreground',
-            'accent','accent-foreground','destructive','destructive-foreground','border','input','ring',
-          ]
-          const vars = cssVarNames
-            .map(name => { const v = rootStyle.getPropertyValue(`--${name}`).trim(); return v ? `--${name}: ${v};` : '' })
-            .filter(Boolean).join('\n  ')
-          const overrideStyle = clonedDoc.createElement('style')
-          overrideStyle.textContent = `:root { ${vars} }`
-          clonedDoc.head.appendChild(overrideStyle)
-        }
+      const dataUrl = await toPng(element, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
       })
 
+      element.style.padding = origPadding
+      element.style.fontFamily = origFont
       if (dialogContent instanceof HTMLElement) {
         dialogContent.style.overflow = origOverflow || ''
         dialogContent.style.maxHeight = origMaxH || ''
       }
-      element.style.width = ''
-      element.style.maxWidth = ''
 
-      const imgData = canvas.toDataURL('image/png')
+      const img = new Image()
+      img.src = dataUrl
+      await new Promise((resolve) => { img.onload = resolve })
+
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const pdfW = pdf.internal.pageSize.getWidth()
       const pdfH = pdf.internal.pageSize.getHeight()
       const imgW = pdfW
-      const imgH = (canvas.height * pdfW) / canvas.width
+      const imgH = (img.height * pdfW) / img.width
 
       let heightLeft = imgH
       let position = 0
-      pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH)
+      pdf.addImage(dataUrl, 'PNG', 0, position, imgW, imgH)
       heightLeft -= pdfH
       while (heightLeft > 0) {
         position = heightLeft - imgH
         pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH)
+        pdf.addImage(dataUrl, 'PNG', 0, position, imgW, imgH)
         heightLeft -= pdfH
       }
 
@@ -433,8 +419,7 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
 
             {/* Summary */}
             <div className="border-t-2 border-gray-300 print:border-black pt-4">
-              <div className="flex justify-end">
-                <div className="w-full max-w-md space-y-2">
+              <div className="w-full space-y-2">
                   <div className="flex justify-between py-1">
                     <span className="text-sm font-medium">Tổng tiền hàng:</span>
                     <span className="text-sm font-medium">{fmtVND(merchandiseTotal)}</span>
@@ -457,7 +442,6 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
                       {remaining > 0 ? fmtVND(remaining) : "Đã thanh toán đủ"}
                     </span>
                   </div>
-                </div>
               </div>
             </div>
 
