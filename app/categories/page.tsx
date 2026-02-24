@@ -20,6 +20,8 @@ import {
 import { Plus, Pencil, Trash2, Search, Tags } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatVNDate } from '@/lib/utils'
+
+interface Category {
   id: string
   warehouse_id: string
   name: string

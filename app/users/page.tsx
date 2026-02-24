@@ -28,6 +28,8 @@ import {
 } from '@/components/ui/select'
 import { Shield, User } from 'lucide-react'
 import { formatVNDate } from '@/lib/utils'
+
+interface UserProfile {
   id: string
   full_name: string | null
   role: string
