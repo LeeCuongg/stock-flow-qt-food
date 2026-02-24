@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Download, Printer, Loader2 } from "lucide-react"
+import { Download, Printer, Loader2, Copy, Check } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
+import { toPng } from "html-to-image"
 import { vnToday } from "@/lib/utils"
 
 interface StockInBatchDetail {
@@ -53,6 +54,8 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
   const [details, setDetails] = useState<StockInBatchDetail | null>(null)
   const [payments, setPayments] = useState<Payment[]>([])
   const [downloading, setDownloading] = useState(false)
+  const [copying, setCopying] = useState(false)
+  const [copied, setCopied] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
@@ -115,6 +118,56 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
     }
   }
 
+  const handleCopyImage = async () => {
+    if (!printRef.current || !details) {
+      toast.error("Chưa có dữ liệu để copy")
+      return
+    }
+    setCopying(true)
+    try {
+      const element = printRef.current
+
+      const dialogContent = element.closest('.overflow-y-auto')
+      const origOverflow = dialogContent ? (dialogContent as HTMLElement).style.overflow : null
+      const origMaxH = dialogContent ? (dialogContent as HTMLElement).style.maxHeight : null
+
+      if (dialogContent instanceof HTMLElement) {
+        dialogContent.style.overflow = 'visible'
+        dialogContent.style.maxHeight = 'none'
+      }
+
+      const origPadding = element.style.padding
+      const origFont = element.style.fontFamily
+      element.style.padding = '24px'
+      element.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+      element.offsetHeight
+
+      const dataUrl = await toPng(element, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+      })
+
+      element.style.padding = origPadding
+      element.style.fontFamily = origFont
+      if (dialogContent instanceof HTMLElement) {
+        dialogContent.style.overflow = origOverflow || ''
+        dialogContent.style.maxHeight = origMaxH || ''
+      }
+
+      const res = await fetch(dataUrl)
+      const blob = await res.blob()
+
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      setCopied(true)
+      toast.success("Đã copy ảnh hoá đơn vào clipboard")
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Không thể copy ảnh. Trình duyệt có thể không hỗ trợ.")
+    } finally {
+      setCopying(false)
+    }
+  }
+
   const handlePrint = () => window.print()
 
   const handleDownloadPDF = async () => {
@@ -152,18 +205,18 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
         windowWidth: element.offsetWidth,
         windowHeight: element.offsetHeight,
         onclone: (clonedDoc: Document) => {
-          clonedDoc.querySelectorAll('style, link[rel="stylesheet"]').forEach((s: Element) => s.remove())
-          const style = clonedDoc.createElement('style')
-          style.textContent = `
-            * { box-sizing: border-box; }
-            .print\\:hidden { display: none !important; }
-            .invoice-container { width: 100%; padding: 16px; font-family: Arial, sans-serif; color: #000; background: #fff; max-width: 680px; margin: 0 auto; }
-            table { width: 100%; border-collapse: collapse; }
-            table, th, td { border: 1px solid #000; }
-            th { background-color: #e5e7eb; font-weight: 600; padding: 8px 12px; text-align: center; }
-            td { padding: 8px 12px; }
-          `
-          clonedDoc.head.appendChild(style)
+          const rootStyle = getComputedStyle(document.documentElement)
+          const cssVarNames = [
+            'background','foreground','card','card-foreground','popover','popover-foreground',
+            'primary','primary-foreground','secondary','secondary-foreground','muted','muted-foreground',
+            'accent','accent-foreground','destructive','destructive-foreground','border','input','ring',
+          ]
+          const vars = cssVarNames
+            .map(name => { const v = rootStyle.getPropertyValue(`--${name}`).trim(); return v ? `--${name}: ${v};` : '' })
+            .filter(Boolean).join('\n  ')
+          const overrideStyle = clonedDoc.createElement('style')
+          overrideStyle.textContent = `:root { ${vars} }`
+          clonedDoc.head.appendChild(overrideStyle)
         }
       })
 
@@ -224,6 +277,15 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
                 <><Download className="mr-2 h-4 w-4" /> Tải PDF</>
               )}
             </Button>
+            <Button onClick={handleCopyImage} size="sm" variant="outline" disabled={copying || downloading}>
+              {copying ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang copy...</>
+              ) : copied ? (
+                <><Check className="mr-2 h-4 w-4 text-green-600" /> Đã copy</>
+              ) : (
+                <><Copy className="mr-2 h-4 w-4" /> Copy ảnh</>
+              )}
+            </Button>
           </div>
         </DialogHeader>
 
@@ -279,7 +341,7 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
                   <tr className="bg-gray-100 print:bg-gray-200">
                     <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">STT</th>
                     <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">Sản phẩm</th>
-                    <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">Số lượng</th>
+                    <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold">SL</th>
                     <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold whitespace-nowrap">Đơn giá</th>
                     <th className="border border-gray-300 print:border-black px-3 py-2 text-center text-sm font-semibold whitespace-nowrap">Thành tiền</th>
                   </tr>
