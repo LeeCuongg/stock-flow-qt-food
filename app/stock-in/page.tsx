@@ -115,6 +115,7 @@ interface StockInRecord {
   payment_status: string
   created_at: string
   warehouse_id: string
+  stock_in_items?: { quantity: number; unit_price: number; total_price: number }[]
 }
 
 export default function StockInPage() {
@@ -168,7 +169,7 @@ export default function StockInPage() {
     let query = filterProductId
       ? supabase
           .from('stock_in')
-          .select('*, stock_in_items!inner(product_id)', { count: 'exact' })
+          .select('*, stock_in_items!inner(quantity, unit_price, total_price, product_id)', { count: 'exact' })
           .neq('status', 'CANCELLED')
           .eq('stock_in_items.product_id', filterProductId)
       : supabase
@@ -555,19 +556,27 @@ export default function StockInPage() {
                 <TableRow>
                   <TableHead>Ngày tạo</TableHead>
                   <TableHead>Nhà cung cấp</TableHead>
-                  <TableHead className="text-right">Tổng tiền</TableHead>
+                  {filterProductId && <TableHead className="text-right">SL</TableHead>}
+                  {filterProductId && <TableHead className="text-right">Đơn giá</TableHead>}
+                  <TableHead className="text-right">{filterProductId ? 'Thành tiền (SP)' : 'Tổng tiền'}</TableHead>
                   <TableHead className="text-right">Đã TT</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {records.map((r) => (
+                {records.map((r) => {
+                  const productItem = filterProductId && r.stock_in_items?.length
+                    ? r.stock_in_items.reduce((acc, si) => ({ quantity: acc.quantity + Number(si.quantity), total_price: acc.total_price + Number(si.total_price), unit_price: Number(si.unit_price) }), { quantity: 0, total_price: 0, unit_price: 0 })
+                    : null
+                  return (
                   <TableRow key={r.id} className="cursor-pointer" onClick={() => openDetail(r)}>
                     <TableCell>{formatVNDate(r.created_at)}</TableCell>
                     <TableCell>{r.supplier_name || '-'}</TableCell>
+                    {productItem && <TableCell className="text-right">{formatQty(productItem.quantity)}</TableCell>}
+                    {productItem && <TableCell className="text-right">{formatVN(productItem.unit_price)}</TableCell>}
                     <TableCell className="text-right font-medium">
-                      {formatVN(r.total_amount)}
+                      {formatVN(productItem ? productItem.total_price : r.total_amount)}
                     </TableCell>
                     <TableCell className="text-right">
                       {formatVN(r.amount_paid)}
@@ -600,7 +609,8 @@ export default function StockInPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
           )}

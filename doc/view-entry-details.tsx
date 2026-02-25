@@ -153,10 +153,33 @@ export function ViewEntryDetails({ open, onClose, batchId }: ViewEntryDetailsPro
       const res = await fetch(dataUrl)
       const blob = await res.blob()
 
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-      setCopied(true)
-      toast({ title: "Thành công", description: "Đã copy ảnh hoá đơn vào clipboard" })
-      setTimeout(() => setCopied(false), 2000)
+      let didCopy = false
+      if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+          didCopy = true
+        } catch { /* clipboard not supported, fallback below */ }
+      }
+
+      if (!didCopy && navigator.share) {
+        const file = new File([blob], 'hoa-don.png', { type: 'image/png' })
+        await navigator.share({ files: [file] })
+        setCopied(true)
+        toast({ title: "Thành công", description: "Đã mở chia sẻ ảnh hoá đơn" })
+        setTimeout(() => setCopied(false), 2000)
+      } else if (!didCopy) {
+        const link = document.createElement('a')
+        link.href = dataUrl
+        link.download = `phieu-nhap-${details.batch_id}.png`
+        link.click()
+        setCopied(true)
+        toast({ title: "Thành công", description: "Đã tải ảnh hoá đơn" })
+        setTimeout(() => setCopied(false), 2000)
+      } else {
+        setCopied(true)
+        toast({ title: "Thành công", description: "Đã copy ảnh hoá đơn vào clipboard" })
+        setTimeout(() => setCopied(false), 2000)
+      }
     } catch (err: any) {
       toast({ title: "Lỗi", description: err?.message || "Không thể copy ảnh. Trình duyệt có thể không hỗ trợ.", variant: "destructive" })
     } finally {

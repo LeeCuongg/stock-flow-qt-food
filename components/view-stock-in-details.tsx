@@ -156,10 +156,33 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
       const res = await fetch(dataUrl)
       const blob = await res.blob()
 
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-      setCopied(true)
-      toast.success("Đã copy ảnh hoá đơn vào clipboard")
-      setTimeout(() => setCopied(false), 2000)
+      let copied = false
+      if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+          copied = true
+        } catch { /* clipboard not supported, fallback below */ }
+      }
+
+      if (!copied && navigator.share) {
+        const file = new File([blob], 'hoa-don.png', { type: 'image/png' })
+        await navigator.share({ files: [file] })
+        setCopied(true)
+        toast.success("Đã mở chia sẻ ảnh hoá đơn")
+        setTimeout(() => setCopied(false), 2000)
+      } else if (!copied) {
+        const link = document.createElement('a')
+        link.href = dataUrl
+        link.download = `phieu-nhap-${details.id.slice(0, 8)}.png`
+        link.click()
+        setCopied(true)
+        toast.success("Đã tải ảnh hoá đơn")
+        setTimeout(() => setCopied(false), 2000)
+      } else {
+        setCopied(true)
+        toast.success("Đã copy ảnh hoá đơn vào clipboard")
+        setTimeout(() => setCopied(false), 2000)
+      }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Không thể copy ảnh. Trình duyệt có thể không hỗ trợ.")
     } finally {

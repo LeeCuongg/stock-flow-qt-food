@@ -128,6 +128,8 @@ interface SaleRecord {
   amount_paid: number
   payment_status: string
   created_at: string
+  // Product filter fields (populated when filtering by product)
+  sales_items?: { quantity: number; sale_price: number; total_price: number }[]
 }
 
 export default function SalesPage() {
@@ -183,7 +185,7 @@ export default function SalesPage() {
     let query = filterProductId
       ? supabase
           .from('sales')
-          .select(`${selectCols}, sales_items!inner(product_id)`, { count: 'exact' })
+          .select(`${selectCols}, sales_items!inner(quantity, sale_price, total_price, product_id)`, { count: 'exact' })
           .neq('status', 'CANCELLED')
           .eq('sales_items.product_id', filterProductId)
       : supabase
@@ -588,7 +590,9 @@ export default function SalesPage() {
                 <TableRow>
                   <TableHead>Ngày tạo</TableHead>
                   <TableHead>Khách hàng</TableHead>
-                  <TableHead className="text-right">Doanh thu</TableHead>
+                  {filterProductId && <TableHead className="text-right">SL</TableHead>}
+                  {filterProductId && <TableHead className="text-right">Đơn giá</TableHead>}
+                  <TableHead className="text-right">{filterProductId ? 'Thành tiền (SP)' : 'Doanh thu'}</TableHead>
                   <TableHead className="text-right">Đã TT</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead>Ghi chú</TableHead>
@@ -596,12 +600,18 @@ export default function SalesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {records.map((r) => (
+                {records.map((r) => {
+                  const productItem = filterProductId && r.sales_items?.length
+                    ? r.sales_items.reduce((acc, si) => ({ quantity: acc.quantity + Number(si.quantity), total_price: acc.total_price + Number(si.total_price), sale_price: Number(si.sale_price) }), { quantity: 0, total_price: 0, sale_price: 0 })
+                    : null
+                  return (
                   <TableRow key={r.id} className="cursor-pointer" onClick={() => openSaleDetail(r)}>
                     <TableCell>{formatVNDate(r.created_at)}</TableCell>
                     <TableCell>{r.customer_name || '-'}</TableCell>
+                    {productItem && <TableCell className="text-right">{formatQty(productItem.quantity)}</TableCell>}
+                    {productItem && <TableCell className="text-right">{formatVN(productItem.sale_price)}</TableCell>}
                     <TableCell className="text-right font-medium">
-                      {formatVN(r.total_revenue)}
+                      {formatVN(productItem ? productItem.total_price : r.total_revenue)}
                     </TableCell>
                     <TableCell className="text-right">
                       {formatVN(r.amount_paid)}
@@ -631,7 +641,8 @@ export default function SalesPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
           )}
