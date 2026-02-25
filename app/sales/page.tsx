@@ -172,6 +172,7 @@ export default function SalesPage() {
   const [filterCustomerId, setFilterCustomerId] = useState('')
   const [filterPaymentStatus, setFilterPaymentStatus] = useState('')
   const [filterProductId, setFilterProductId] = useState('')
+  const [filterBatchCode, setFilterBatchCode] = useState('')
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
   const pageSize = 50
@@ -181,18 +182,36 @@ export default function SalesPage() {
   const loadRecords = useCallback(async () => {
     setIsLoading(true)
 
+    // If filtering by batch code, first find matching batch IDs
+    let matchingBatchIds: string[] | null = null
+    if (filterBatchCode) {
+      const { data: batchData } = await supabase
+        .from('inventory_batches')
+        .select('id')
+        .ilike('batch_code', `%${filterBatchCode}%`)
+      matchingBatchIds = batchData?.map(b => b.id) || []
+      if (matchingBatchIds.length === 0) {
+        setRecords([])
+        setTotalCount(0)
+        setIsLoading(false)
+        return
+      }
+    }
+
     const selectCols = 'id, customer_name, customer_id, note, total_revenue, total_cost_estimated, profit, amount_paid, payment_status, created_at'
-    let query = filterProductId
+    const needInnerJoin = filterProductId || matchingBatchIds
+    let query = needInnerJoin
       ? supabase
           .from('sales')
-          .select(`${selectCols}, sales_items!inner(quantity, sale_price, total_price, product_id)`, { count: 'exact' })
+          .select(`${selectCols}, sales_items!inner(quantity, sale_price, total_price, product_id, batch_id)`, { count: 'exact' })
           .neq('status', 'CANCELLED')
-          .eq('sales_items.product_id', filterProductId)
       : supabase
           .from('sales')
           .select(selectCols, { count: 'exact' })
           .neq('status', 'CANCELLED')
 
+    if (filterProductId) query = query.eq('sales_items.product_id', filterProductId)
+    if (matchingBatchIds) query = query.in('sales_items.batch_id', matchingBatchIds)
     if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00+07:00')
     if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59+07:00')
     if (filterCustomerId) query = query.eq('customer_id', filterCustomerId)
@@ -205,7 +224,7 @@ export default function SalesPage() {
       setTotalCount(count || 0)
     }
     setIsLoading(false)
-  }, [filterDateFrom, filterDateTo, filterCustomerId, filterPaymentStatus, filterProductId, page])
+  }, [filterDateFrom, filterDateTo, filterCustomerId, filterPaymentStatus, filterProductId, filterBatchCode, page])
 
   const loadProducts = useCallback(async () => {
     const { data } = await supabase
@@ -559,11 +578,20 @@ export default function SalesPage() {
                 triggerClassName="w-[180px] h-9"
               />
             </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Mã lô</Label>
+              <Input
+                placeholder="Tìm mã lô..."
+                value={filterBatchCode}
+                onChange={(e) => setFilterBatchCode(e.target.value)}
+                className="w-[160px] h-9"
+              />
+            </div>
             <Button variant="outline" size="sm" className="h-9" onClick={() => { setPage(0); loadRecords() }}>
               <Search className="mr-1 h-3 w-3" /> Lọc
             </Button>
-            {(filterDatePreset !== 'all' || filterCustomerId || filterPaymentStatus || filterProductId) && (
-              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterCustomerId(''); setFilterPaymentStatus(''); setFilterProductId(''); setPage(0) }}>
+            {(filterDatePreset !== 'all' || filterCustomerId || filterPaymentStatus || filterProductId || filterBatchCode) && (
+              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterCustomerId(''); setFilterPaymentStatus(''); setFilterProductId(''); setFilterBatchCode(''); setPage(0) }}>
                 <X className="mr-1 h-3 w-3" /> Xoá lọc
               </Button>
             )}

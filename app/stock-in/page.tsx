@@ -158,6 +158,7 @@ export default function StockInPage() {
   const [filterSupplierId, setFilterSupplierId] = useState('')
   const [filterPaymentStatus, setFilterPaymentStatus] = useState('')
   const [filterProductId, setFilterProductId] = useState('')
+  const [filterBatchCode, setFilterBatchCode] = useState('')
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
   const pageSize = 50
@@ -166,16 +167,18 @@ export default function StockInPage() {
 
   const loadRecords = useCallback(async () => {
     setIsLoading(true)
-    let query = filterProductId
+    const needInnerJoin = filterProductId || filterBatchCode
+    let query = needInnerJoin
       ? supabase
           .from('stock_in')
-          .select('*, stock_in_items!inner(quantity, unit_price, total_price, product_id)', { count: 'exact' })
+          .select('*, stock_in_items!inner(quantity, unit_price, total_price, product_id, batch_code)', { count: 'exact' })
           .neq('status', 'CANCELLED')
-          .eq('stock_in_items.product_id', filterProductId)
       : supabase
           .from('stock_in')
           .select('*', { count: 'exact' })
           .neq('status', 'CANCELLED')
+    if (filterProductId) query = query.eq('stock_in_items.product_id', filterProductId)
+    if (filterBatchCode) query = query.ilike('stock_in_items.batch_code', `%${filterBatchCode}%`)
     if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00+07:00')
     if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59+07:00')
     if (filterSupplierId) query = query.eq('supplier_id', filterSupplierId)
@@ -188,7 +191,7 @@ export default function StockInPage() {
       setTotalCount(count || 0)
     }
     setIsLoading(false)
-  }, [filterDateFrom, filterDateTo, filterSupplierId, filterPaymentStatus, filterProductId, page])
+  }, [filterDateFrom, filterDateTo, filterSupplierId, filterPaymentStatus, filterProductId, filterBatchCode, page])
 
   const loadProducts = useCallback(async () => {
     const { data } = await supabase
@@ -525,11 +528,20 @@ export default function StockInPage() {
                 triggerClassName="w-[180px] h-9"
               />
             </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Mã lô</Label>
+              <Input
+                placeholder="Tìm mã lô..."
+                value={filterBatchCode}
+                onChange={(e) => setFilterBatchCode(e.target.value)}
+                className="w-[160px] h-9"
+              />
+            </div>
             <Button variant="outline" size="sm" className="h-9" onClick={() => { setPage(0); loadRecords() }}>
               <Search className="mr-1 h-3 w-3" /> Lọc
             </Button>
-            {(filterDatePreset !== 'all' || filterSupplierId || filterPaymentStatus || filterProductId) && (
-              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterSupplierId(''); setFilterPaymentStatus(''); setFilterProductId(''); setPage(0) }}>
+            {(filterDatePreset !== 'all' || filterSupplierId || filterPaymentStatus || filterProductId || filterBatchCode) && (
+              <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterSupplierId(''); setFilterPaymentStatus(''); setFilterProductId(''); setFilterBatchCode(''); setPage(0) }}>
                 <X className="mr-1 h-3 w-3" /> Xoá lọc
               </Button>
             )}

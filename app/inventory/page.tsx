@@ -36,7 +36,7 @@ export default function InventoryPage() {
     const { data, error } = await supabase
       .from('inventory_batches')
       .select('*, products(name, unit, sku)')
-      .order('expiry_date', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false })
     if (error) {
       toast.error('Lỗi tải tồn kho')
     } else {
