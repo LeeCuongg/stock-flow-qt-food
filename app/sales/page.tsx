@@ -92,6 +92,8 @@ interface Product {
   sku: string | null
   unit: string
   default_sale_price: number
+  tolerance_type: 'FIXED' | 'PERCENT'
+  tolerance_value: number
 }
 
 interface Batch {
@@ -229,7 +231,7 @@ export default function SalesPage() {
   const loadProducts = useCallback(async () => {
     const { data } = await supabase
       .from('products')
-      .select('id, name, sku, unit, default_sale_price')
+      .select('id, name, sku, unit, default_sale_price, tolerance_type, tolerance_value')
       .order('name')
     setProducts(data || [])
   }, [])
@@ -347,8 +349,16 @@ export default function SalesPage() {
         toast.error(`Số lượng phải > 0 (${item.product_name})`)
         return
       }
-      if (item.quantity > item.batch_remaining) {
-        toast.error(`Số lượng vượt tồn kho (${item.product_name} - ${item.batch_code}). Tồn: ${item.batch_remaining}`)
+      // Tolerance check: allow quantity slightly above remaining
+      const product = products.find(p => p.id === item.product_id)
+      const tolType = product?.tolerance_type || 'FIXED'
+      const tolValue = product?.tolerance_value || 0
+      const allowed = tolType === 'PERCENT'
+        ? item.batch_remaining * tolValue / 100
+        : tolValue
+      const maxAllowed = item.batch_remaining + allowed
+      if (item.quantity > maxAllowed) {
+        toast.error(`Số lượng vượt tồn kho (${item.product_name} - ${item.batch_code}). Tồn: ${item.batch_remaining}, Tối đa: ${maxAllowed.toFixed(2)}`)
         return
       }
       if (item.sale_price < 0) {
@@ -845,7 +855,17 @@ export default function SalesPage() {
                           )}
                         </div>
                         {/* Batch entries */}
-                        {group.entries.map(({ item, idx }, batchIdx) => (
+                        {group.entries.map(({ item, idx }, batchIdx) => {
+                          const prod = products.find(p => p.id === item.product_id)
+                          const tolType = prod?.tolerance_type || 'FIXED'
+                          const tolValue = prod?.tolerance_value || 0
+                          const tolAllowed = tolType === 'PERCENT'
+                            ? item.batch_remaining * tolValue / 100
+                            : tolValue
+                          const maxQty = item.batch_remaining + tolAllowed
+                          const isOverRemaining = item.quantity > item.batch_remaining
+                          const toleranceDelta = isOverRemaining ? item.quantity - item.batch_remaining : 0
+                          return (
                           <div key={idx} className={`space-y-2 ${batchIdx > 0 ? 'border-t pt-3' : ''}`}>
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -862,8 +882,10 @@ export default function SalesPage() {
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div className="grid gap-1">
-                                <Label className="text-xs text-muted-foreground">Số lượng * (tối đa {item.batch_remaining})</Label>
-                                <Input type="number" min={1} max={item.batch_remaining} value={item.quantity}
+                                <Label className="text-xs text-muted-foreground">
+                                  Số lượng * (tối đa {tolAllowed > 0 ? formatQty(maxQty) : formatQty(item.batch_remaining)})
+                                </Label>
+                                <Input type="number" min={0.01} step="any" max={maxQty} value={item.quantity}
                                   onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} />
                               </div>
                               <div className="grid gap-1">
@@ -876,6 +898,11 @@ export default function SalesPage() {
                               <Input placeholder="Ghi chú sản phẩm..." value={item.note}
                                 onChange={(e) => updateItem(idx, 'note', e.target.value)} className="text-xs h-8" />
                             </div>
+                            {isOverRemaining && toleranceDelta <= tolAllowed && tolAllowed > 0 && (
+                              <div className="rounded-md border border-yellow-400/50 bg-yellow-50 dark:bg-yellow-950/20 px-3 py-2 text-xs text-yellow-800 dark:text-yellow-200">
+                                ⚠️ Sai số {formatQty(toleranceDelta)} {prod?.unit || ''} nằm trong mức cho phép ({tolType === 'PERCENT' ? `${tolValue}%` : `${tolValue} ${prod?.unit || ''}`}). Hệ thống sẽ tự động ghi nhận hao hụt nhỏ.
+                              </div>
+                            )}
                             <div className="flex justify-between text-sm">
                               <span className="text-muted-foreground">
                                 Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.sale_price)}</span>
@@ -891,7 +918,8 @@ export default function SalesPage() {
                               </span>
                             </div>
                           </div>
-                        ))}
+                          )
+                        })}
                         {/* Group summary (only when multiple batches) */}
                         {group.entries.length > 1 && (
                           <div className="border-t pt-2 flex justify-between text-xs text-muted-foreground">

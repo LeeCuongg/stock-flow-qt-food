@@ -22,7 +22,7 @@ import { CurrencyInput } from '@/components/ui/currency-input'
 import { formatVN, formatQty, formatVNDate } from '@/lib/utils'
 
 interface Customer { id: string; name: string }
-interface Product { id: string; name: string; sku: string | null; unit: string; default_sale_price: number }
+interface Product { id: string; name: string; sku: string | null; unit: string; default_sale_price: number; tolerance_type: 'FIXED' | 'PERCENT'; tolerance_value: number }
 interface Batch {
   id: string; product_id: string; batch_code: string | null
   quantity_remaining: number; cost_price: number; expiry_date: string | null
@@ -72,7 +72,7 @@ export default function SaleEditPage() {
         .eq('id', id)
         .single(),
       supabase.from('customers').select('id, name').order('name'),
-      supabase.from('products').select('id, name, sku, unit, default_sale_price').order('name'),
+      supabase.from('products').select('id, name, sku, unit, default_sale_price, tolerance_type, tolerance_value').order('name'),
       supabase.from('inventory_batches').select('id, product_id, batch_code, quantity_remaining, cost_price, expiry_date').order('expiry_date', { ascending: true, nullsFirst: false }),
       supabase.from('sale_adjustments').select('id, adjustment_type, amount, note').eq('sale_id', id).order('created_at'),
     ])
@@ -166,7 +166,16 @@ export default function SaleEditPage() {
   const totalDiscount = editAdjustments.filter(a => a.type === 'DISCOUNT').reduce((s, a) => s + a.amount, 0)
   const adjustedRevenue = totalRevenue + totalExtraCharge - totalDiscount
 
-  const maxQty = (item: EditSaleItem) => item.batch_remaining + item.old_qty
+  const maxQty = (item: EditSaleItem) => {
+    const prod = products.find(p => p.id === item.product_id)
+    const tolType = prod?.tolerance_type || 'FIXED'
+    const tolValue = prod?.tolerance_value || 0
+    const effectiveRemaining = item.batch_remaining + item.old_qty
+    const tolAllowed = tolType === 'PERCENT'
+      ? effectiveRemaining * tolValue / 100
+      : tolValue
+    return effectiveRemaining + tolAllowed
+  }
 
   const handleSubmit = async () => {
     if (items.length === 0) { toast.error('Cần ít nhất 1 sản phẩm'); return }
@@ -328,6 +337,25 @@ export default function SaleEditPage() {
                 <Input placeholder="Ghi chú sản phẩm..." value={item.note}
                   onChange={(e) => updateItem(idx, 'note', e.target.value)} className="text-xs h-8" />
               </div>
+              {(() => {
+                const prod = products.find(p => p.id === item.product_id)
+                const tolType = prod?.tolerance_type || 'FIXED'
+                const tolValue = prod?.tolerance_value || 0
+                const effectiveRemaining = item.batch_remaining + item.old_qty
+                const tolAllowed = tolType === 'PERCENT'
+                  ? effectiveRemaining * tolValue / 100
+                  : tolValue
+                const isOverRemaining = item.quantity > effectiveRemaining
+                const toleranceDelta = isOverRemaining ? item.quantity - effectiveRemaining : 0
+                if (isOverRemaining && toleranceDelta <= tolAllowed && tolAllowed > 0) {
+                  return (
+                    <div className="rounded-md border border-yellow-400/50 bg-yellow-50 dark:bg-yellow-950/20 px-3 py-2 text-xs text-yellow-800 dark:text-yellow-200">
+                      ⚠️ Sai số {formatQty(toleranceDelta)} {prod?.unit || ''} nằm trong mức cho phép ({tolType === 'PERCENT' ? `${tolValue}%` : `${tolValue} ${prod?.unit || ''}`}). Hệ thống sẽ tự động ghi nhận hao hụt nhỏ.
+                    </div>
+                  )
+                }
+                return null
+              })()}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
                   Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.sale_price)}</span>

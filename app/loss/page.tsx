@@ -28,6 +28,7 @@ const LOSS_REASONS = [
   { value: 'LOST', label: 'Thất lạc' },
   { value: 'ADJUSTMENT', label: 'Điều chỉnh' },
   { value: 'SAMPLE', label: 'Mẫu thử' },
+  { value: 'AUTO_TOLERANCE', label: 'Sai số tự động' },
 ] as const
 
 interface Product {
@@ -239,6 +240,7 @@ export default function LossPage() {
       case 'LOST': return 'destructive' as const
       case 'ADJUSTMENT': return 'secondary' as const
       case 'SAMPLE': return 'outline' as const
+      case 'AUTO_TOLERANCE': return 'outline' as const
       default: return 'secondary' as const
     }
   }

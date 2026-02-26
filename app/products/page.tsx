@@ -55,6 +55,8 @@ interface Product {
   category_id: string | null
   warehouse_id: string
   created_at: string
+  tolerance_type: 'FIXED' | 'PERCENT'
+  tolerance_value: number
   product_categories?: { name: string } | null
 }
 
@@ -63,6 +65,8 @@ const emptyForm = {
   sku: '',
   unit: 'kg',
   category_id: '',
+  tolerance_type: 'FIXED' as 'FIXED' | 'PERCENT',
+  tolerance_value: 0,
 }
 
 export default function ProductsPage() {
@@ -70,6 +74,8 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [filterUnit, setFilterUnit] = useState('')
+  const [availableUnits, setAvailableUnits] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -82,6 +88,14 @@ export default function ProductsPage() {
   const loadCategories = useCallback(async () => {
     const { data } = await supabase.from('product_categories').select('id, name').order('name')
     setCategories(data || [])
+  }, [])
+
+  const loadUnits = useCallback(async () => {
+    const { data } = await supabase.from('products').select('unit')
+    if (data) {
+      const units = Array.from(new Set(data.map((p) => p.unit))).sort()
+      setAvailableUnits(units)
+    }
   }, [])
 
   const loadProducts = useCallback(async () => {
@@ -97,6 +111,9 @@ export default function ProductsPage() {
     if (filterCategory) {
       query = query.eq('category_id', filterCategory)
     }
+    if (filterUnit) {
+      query = query.eq('unit', filterUnit)
+    }
     const { data, error } = await query
     if (error) {
       toast.error('Lỗi tải sản phẩm')
@@ -104,9 +121,9 @@ export default function ProductsPage() {
       setProducts(data || [])
     }
     setIsLoading(false)
-  }, [search, filterCategory])
+  }, [search, filterCategory, filterUnit])
 
-  useEffect(() => { loadCategories() }, [loadCategories])
+  useEffect(() => { loadCategories(); loadUnits() }, [loadCategories, loadUnits])
   useEffect(() => { loadProducts() }, [loadProducts])
 
   const openCreate = () => {
@@ -130,6 +147,8 @@ export default function ProductsPage() {
       sku: product.sku || '',
       unit: product.unit,
       category_id: product.category_id || '',
+      tolerance_type: product.tolerance_type || 'FIXED',
+      tolerance_value: product.tolerance_value || 0,
     })
     setDialogOpen(true)
   }
@@ -154,6 +173,8 @@ export default function ProductsPage() {
             sku: form.sku.trim() || null,
             unit: form.unit.trim(),
             category_id: form.category_id || null,
+            tolerance_type: form.tolerance_type,
+            tolerance_value: form.tolerance_value,
           })
           .eq('id', editingProduct.id)
         if (error) throw error
@@ -171,6 +192,8 @@ export default function ProductsPage() {
           unit: form.unit.trim(),
           category_id: form.category_id || null,
           warehouse_id: warehouseId,
+          tolerance_type: form.tolerance_type,
+          tolerance_value: form.tolerance_value,
         })
         if (error) throw error
         toast.success('Tạo sản phẩm thành công')
@@ -232,8 +255,19 @@ export default function ProductsPage() {
                 ))}
               </SelectContent>
             </Select>
-            {filterCategory && (
-              <Button variant="ghost" size="sm" onClick={() => setFilterCategory('')}>
+            <Select value={filterUnit || 'all'} onValueChange={(v) => setFilterUnit(v === 'all' ? '' : v)}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Tất cả đơn vị" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả đơn vị</SelectItem>
+                {availableUnits.map((u) => (
+                  <SelectItem key={u} value={u}>{u}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(filterCategory || filterUnit) && (
+              <Button variant="ghost" size="sm" onClick={() => { setFilterCategory(''); setFilterUnit('') }}>
                 Xóa lọc
               </Button>
             )}
@@ -256,6 +290,7 @@ export default function ProductsPage() {
                   <TableHead>Tên sản phẩm</TableHead>
                   <TableHead>Danh mục</TableHead>
                   <TableHead>Đơn vị</TableHead>
+                  <TableHead>Sai số cho phép</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
@@ -272,6 +307,17 @@ export default function ProductsPage() {
                       )}
                     </TableCell>
                     <TableCell><Badge variant="secondary">{p.unit}</Badge></TableCell>
+                    <TableCell>
+                      {p.tolerance_value > 0 ? (
+                        <Badge variant="outline">
+                          {p.tolerance_type === 'PERCENT'
+                            ? `${p.tolerance_value}%`
+                            : `${p.tolerance_value} ${p.unit}`}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">Không</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
@@ -342,6 +388,39 @@ export default function ProductsPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Sai số cho phép (Tolerance)</Label>
+              <p className="text-xs text-muted-foreground">Cho phép xuất vượt tồn kho trong mức sai số nhỏ (ví dụ: sai số cân)</p>
+              <div className="grid grid-cols-2 gap-4">
+                <Select value={form.tolerance_type} onValueChange={(v) => setForm({ ...form, tolerance_type: v as 'FIXED' | 'PERCENT' })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FIXED">Cố định ({form.unit})</SelectItem>
+                    <SelectItem value="PERCENT">Phần trăm (%)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min={0}
+                  step={form.tolerance_type === 'PERCENT' ? 0.1 : 0.01}
+                  value={form.tolerance_value}
+                  onChange={(e) => setForm({ ...form, tolerance_value: Number(e.target.value) })}
+                  placeholder={form.tolerance_type === 'PERCENT' ? 'VD: 0.5' : 'VD: 0.1'}
+                />
+              </div>
+              {form.tolerance_value > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  → Khi tồn kho còn 10 {form.unit}, cho phép xuất tối đa{' '}
+                  <span className="font-medium">
+                    {form.tolerance_type === 'PERCENT'
+                      ? `${(10 + 10 * form.tolerance_value / 100).toFixed(2)} ${form.unit} (+${form.tolerance_value}%)`
+                      : `${(10 + form.tolerance_value).toFixed(2)} ${form.unit} (+${form.tolerance_value})`}
+                  </span>
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
