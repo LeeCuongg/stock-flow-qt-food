@@ -115,8 +115,10 @@ interface StockInRecord {
   payment_status: string
   created_at: string
   warehouse_id: string
-  stock_in_items?: { quantity: number; unit_price: number; total_price: number }[]
+  stock_in_items?: { quantity: number; unit_price: number; total_price: number; product_id?: string; batch_code?: string }[]
+  has_consumed_stock?: boolean
 }
+
 
 export default function StockInPage() {
   const [records, setRecords] = useState<StockInRecord[]>([])
@@ -187,7 +189,42 @@ export default function StockInPage() {
     const { data, error, count } = await query
     if (error) toast.error('Lỗi tải phiếu nhập')
     else {
-      setRecords(data || [])
+      const loadedRecords: StockInRecord[] = data || []
+      // Check consumed stock for records that could be edited/cancelled (amount_paid === 0)
+      const editableIds = loadedRecords.filter(r => Number(r.amount_paid) === 0).map(r => r.id)
+      if (editableIds.length > 0) {
+        const { data: itemsData } = await supabase
+          .from('stock_in_items')
+          .select('stock_in_id, quantity, product_id, batch_code, expired_date')
+          .in('stock_in_id', editableIds)
+        if (itemsData && itemsData.length > 0) {
+          // Get unique batch lookups
+          const batchLookups = itemsData.map((si: { product_id: string; batch_code: string }) => si.batch_code)
+          const uniqueBatchCodes = [...new Set(batchLookups)]
+          const { data: batchesData } = await supabase
+            .from('inventory_batches')
+            .select('product_id, batch_code, quantity, quantity_remaining')
+            .in('batch_code', uniqueBatchCodes)
+          if (batchesData) {
+            const batchMap = new Map<string, { quantity: number; quantity_remaining: number }>()
+            batchesData.forEach((b: { product_id: string; batch_code: string; quantity: number; quantity_remaining: number }) => {
+              batchMap.set(`${b.product_id}|${b.batch_code}`, { quantity: b.quantity, quantity_remaining: b.quantity_remaining })
+            })
+            // For each editable record, check if any item's batch has been consumed
+            const consumedSet = new Set<string>()
+            itemsData.forEach((si: { stock_in_id: string; product_id: string; batch_code: string; quantity: number }) => {
+              const batch = batchMap.get(`${si.product_id}|${si.batch_code}`)
+              if (batch && batch.quantity_remaining < si.quantity) {
+                consumedSet.add(si.stock_in_id)
+              }
+            })
+            loadedRecords.forEach(r => {
+              if (consumedSet.has(r.id)) r.has_consumed_stock = true
+            })
+          }
+        }
+      }
+      setRecords(loadedRecords)
       setTotalCount(count || 0)
     }
     setIsLoading(false)
@@ -603,12 +640,12 @@ export default function StockInPage() {
                         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}`) }}>
                           <Eye className="mr-1 h-3 w-3" /> Xem
                         </Button>
-                        {Number(r.amount_paid) === 0 && (
+                        {Number(r.amount_paid) === 0 && !r.has_consumed_stock && (
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}/edit`) }}>
                             <Pencil className="mr-1 h-3 w-3" /> Sửa
                           </Button>
                         )}
-                        {Number(r.amount_paid) === 0 && (
+                        {Number(r.amount_paid) === 0 && !r.has_consumed_stock && (
                           <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); openCancelDialog(r) }}>
                             <Trash2 className="mr-1 h-3 w-3" /> Huỷ
                           </Button>

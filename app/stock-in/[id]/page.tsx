@@ -93,47 +93,31 @@ export default function StockInDetailPage() {
   }, [id])
 
   const checkHasSales = useCallback(async () => {
-    // Check if any batches from this stock-in have been sold
-    // We query stock_in_items → match inventory_batches → check sales_items
+    // Check if any batches from this stock-in have been consumed (sold or lost)
     if (!detail) return
     const { data: items } = await supabase
       .from('stock_in_items')
-      .select('product_id, batch_code, expired_date')
+      .select('product_id, batch_code, quantity')
       .eq('stock_in_id', id)
     if (!items || items.length === 0) { setHasSales(false); return }
 
-    // For each item, find the batch and check if sales_items reference it
+    const batchCodes = [...new Set(items.map((i: { batch_code: string }) => i.batch_code))]
+    const { data: batches } = await supabase
+      .from('inventory_batches')
+      .select('product_id, batch_code, quantity, quantity_remaining')
+      .in('batch_code', batchCodes)
+    if (!batches) { setHasSales(false); return }
+
+    const batchMap = new Map<string, { quantity: number; quantity_remaining: number }>()
+    batches.forEach((b: { product_id: string; batch_code: string; quantity: number; quantity_remaining: number }) => {
+      batchMap.set(`${b.product_id}|${b.batch_code}`, { quantity: b.quantity, quantity_remaining: b.quantity_remaining })
+    })
+
     for (const item of items) {
-      const { data: batches } = await supabase
-        .from('inventory_batches')
-        .select('id')
-        .eq('product_id', item.product_id)
-        .eq('batch_code', item.batch_code)
-        .is('expiry_date', item.expired_date === null ? null : undefined)
-      if (item.expired_date !== null && batches?.length === 0) {
-        const { data: batchesWithDate } = await supabase
-          .from('inventory_batches')
-          .select('id')
-          .eq('product_id', item.product_id)
-          .eq('batch_code', item.batch_code)
-          .eq('expiry_date', item.expired_date)
-        if (batchesWithDate && batchesWithDate.length > 0) {
-          for (const b of batchesWithDate) {
-            const { count } = await supabase
-              .from('sales_items')
-              .select('id', { count: 'exact', head: true })
-              .eq('batch_id', b.id)
-            if (count && count > 0) { setHasSales(true); return }
-          }
-        }
-      } else if (batches && batches.length > 0) {
-        for (const b of batches) {
-          const { count } = await supabase
-            .from('sales_items')
-            .select('id', { count: 'exact', head: true })
-            .eq('batch_id', b.id)
-          if (count && count > 0) { setHasSales(true); return }
-        }
+      const batch = batchMap.get(`${item.product_id}|${item.batch_code}`)
+      if (batch && batch.quantity_remaining < item.quantity) {
+        setHasSales(true)
+        return
       }
     }
     setHasSales(false)
@@ -215,12 +199,12 @@ export default function StockInDetailPage() {
         </div>
         {detail.status !== 'CANCELLED' && (
           <div className="flex items-center gap-2">
-            {Number(detail.amount_paid) === 0 && (
+            {Number(detail.amount_paid) === 0 && !hasSales && (
               <Button variant="destructive" onClick={() => { setCancelReason(''); setCancelOpen(true) }}>
                 <Trash2 className="mr-2 h-4 w-4" /> Huỷ phiếu
               </Button>
             )}
-            {Number(detail.amount_paid) === 0 && (
+            {Number(detail.amount_paid) === 0 && !hasSales && (
               <Button onClick={() => router.push(`/stock-in/${id}/edit`)}>
                 <Pencil className="mr-2 h-4 w-4" /> Chỉnh sửa
               </Button>

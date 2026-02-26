@@ -347,11 +347,11 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
                 </thead>
                 <tbody>
                   {(() => {
-                    // Group items by product name + unit + sale_price
-                    const grouped: { name: string; unit: string; sale_price: number; quantity: number; total_price: number }[] = []
+                    // Group items by product name + unit + sale_price + note
+                    const grouped: { name: string; unit: string; sale_price: number; quantity: number; total_price: number; note: string | null }[] = []
                     details.sales_items.forEach((entry) => {
-                      const key = `${entry.products?.name}|${entry.products?.unit}|${entry.sale_price}`
-                      const existing = grouped.find(g => `${g.name}|${g.unit}|${g.sale_price}` === key)
+                      const key = `${entry.products?.name}|${entry.products?.unit}|${entry.sale_price}|${entry.note || ''}`
+                      const existing = grouped.find(g => `${g.name}|${g.unit}|${g.sale_price}|${g.note || ''}` === key)
                       if (existing) {
                         existing.quantity += Number(entry.quantity)
                         existing.total_price += Number(entry.total_price)
@@ -362,6 +362,7 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
                           sale_price: entry.sale_price,
                           quantity: Number(entry.quantity),
                           total_price: Number(entry.total_price),
+                          note: entry.note || null,
                         })
                       }
                     })
@@ -371,6 +372,9 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
                         <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-left">
                           {row.name}
                           <span className="text-gray-500 text-xs ml-1">({row.unit})</span>
+                          {row.note && (
+                            <div className="text-gray-500 text-xs mt-0.5 italic">{row.note}</div>
+                          )}
                         </td>
                         <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center">
                           {new Intl.NumberFormat("vi-VN").format(row.quantity)}

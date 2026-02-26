@@ -357,6 +357,9 @@ export function ViewStockInDetails({ open, onClose, stockInId }: ViewStockInDeta
                       <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-left">
                         {entry.products?.name || "-"}
                         <span className="text-gray-500 text-xs ml-1">({entry.products?.unit})</span>
+                        {entry.note && (
+                          <div className="text-gray-500 text-xs mt-0.5 italic">{entry.note}</div>
+                        )}
                       </td>
                       <td className="border border-gray-300 print:border-black px-3 py-2 text-sm text-center">
                         {new Intl.NumberFormat("vi-VN").format(entry.quantity)}
