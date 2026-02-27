@@ -182,7 +182,7 @@ export default function StockInEditPage() {
   const existingLandedTotal = landedCosts.reduce((sum, lc) => sum + Number(lc.amount), 0)
   const newLandedTotal = newLandedCosts.reduce((sum, lc) => sum + lc.amount, 0)
   const grandTotal = totalCost + existingLandedTotal + newLandedTotal
-  const canAddLandedCost = !hasSales
+  const canAddLandedCost = true
 
   const handleSubmit = async () => {
     if (items.length === 0) { toast.error('Cần ít nhất 1 sản phẩm'); return }
