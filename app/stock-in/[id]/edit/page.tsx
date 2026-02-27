@@ -182,7 +182,6 @@ export default function StockInEditPage() {
   const existingLandedTotal = landedCosts.reduce((sum, lc) => sum + Number(lc.amount), 0)
   const newLandedTotal = newLandedCosts.reduce((sum, lc) => sum + lc.amount, 0)
   const grandTotal = totalCost + existingLandedTotal + newLandedTotal
-  const canAddLandedCost = true
 
   const handleSubmit = async () => {
     if (items.length === 0) { toast.error('Cần ít nhất 1 sản phẩm'); return }
@@ -344,13 +343,9 @@ export default function StockInEditPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Chi phí nhập hàng (Landed Cost)</CardTitle>
-            {canAddLandedCost ? (
-              <Button size="sm" variant="outline" onClick={() => setNewLandedCosts(prev => [...prev, { cost_type: '', amount: 0, allocation_method: 'BY_QUANTITY' }])}>
-                <Plus className="mr-1 h-3 w-3" /> Thêm chi phí
-              </Button>
-            ) : hasSales ? (
-              <span className="text-xs text-muted-foreground">Lô hàng đã được bán</span>
-            ) : null}
+            <Button size="sm" variant="outline" onClick={() => setNewLandedCosts(prev => [...prev, { cost_type: '', amount: 0, allocation_method: 'BY_QUANTITY' }])}>
+              <Plus className="mr-1 h-3 w-3" /> Thêm chi phí
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
