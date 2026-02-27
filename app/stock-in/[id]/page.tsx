@@ -204,7 +204,7 @@ export default function StockInDetailPage() {
                 <Trash2 className="mr-2 h-4 w-4" /> Huỷ phiếu
               </Button>
             )}
-            {Number(detail.amount_paid) === 0 && !hasSales && (
+            {Number(detail.amount_paid) === 0 && (
               <Button onClick={() => router.push(`/stock-in/${id}/edit`)}>
                 <Pencil className="mr-2 h-4 w-4" /> Chỉnh sửa
               </Button>

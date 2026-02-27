@@ -640,7 +640,7 @@ export default function StockInPage() {
                         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}`) }}>
                           <Eye className="mr-1 h-3 w-3" /> Xem
                         </Button>
-                        {Number(r.amount_paid) === 0 && !r.has_consumed_stock && (
+                        {Number(r.amount_paid) === 0 && (
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/stock-in/${r.id}/edit`) }}>
                             <Pencil className="mr-1 h-3 w-3" /> Sửa
                           </Button>

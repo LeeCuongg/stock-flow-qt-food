@@ -33,6 +33,7 @@ interface EditItem {
   quantity: number
   cost_price: number
   note: string
+  is_locked?: boolean
 }
 
 interface LandedCost {
@@ -102,6 +103,7 @@ export default function StockInEditPage() {
       quantity: Number(item.quantity),
       cost_price: Number(item.cost_price),
       note: item.note || '',
+      is_locked: false,
     })))
     setSuppliers(suppRes.data || [])
     setProducts(prodRes.data || [])
@@ -115,29 +117,34 @@ export default function StockInEditPage() {
     setLandedCosts(lcData || [])
     setNewLandedCosts([])
 
-    // Check if batches have sales
-    let foundSales = false
-    for (const item of si.stock_in_items) {
-      if (foundSales) break
-      const batchQuery = supabase
+    // Check which batches have been consumed (sold/lost) → lock them
+    const batchCodes = [...new Set(si.stock_in_items.map((i: { batch_code: string }) => i.batch_code))]
+    if (batchCodes.length > 0) {
+      const { data: batchesData } = await supabase
         .from('inventory_batches')
-        .select('id')
-        .eq('product_id', item.product_id)
-        .eq('batch_code', item.batch_code)
-      const { data: batches } = item.expired_date
-        ? await batchQuery.eq('expiry_date', item.expired_date)
-        : await batchQuery.is('expiry_date', null)
-      if (batches) {
-        for (const b of batches) {
-          const { count } = await supabase
-            .from('sales_items')
-            .select('id', { count: 'exact', head: true })
-            .eq('batch_id', b.id)
-          if (count && count > 0) { foundSales = true; break }
-        }
+        .select('product_id, batch_code, quantity, quantity_remaining')
+        .in('batch_code', batchCodes)
+      if (batchesData) {
+        const batchMap = new Map<string, { quantity: number; quantity_remaining: number }>()
+        batchesData.forEach((b: { product_id: string; batch_code: string; quantity: number; quantity_remaining: number }) => {
+          batchMap.set(`${b.product_id}|${b.batch_code}`, { quantity: b.quantity, quantity_remaining: b.quantity_remaining })
+        })
+        const lockedKeys = new Set<string>()
+        let foundConsumed = false
+        si.stock_in_items.forEach((item: { product_id: string; batch_code: string; quantity: number }) => {
+          const batch = batchMap.get(`${item.product_id}|${item.batch_code}`)
+          if (batch && batch.quantity_remaining < item.quantity) {
+            lockedKeys.add(`${item.product_id}|${item.batch_code}`)
+            foundConsumed = true
+          }
+        })
+        setHasSales(foundConsumed)
+        setItems(prev => prev.map(item => ({
+          ...item,
+          is_locked: lockedKeys.has(`${item.product_id}|${item.batch_code}`),
+        })))
       }
     }
-    setHasSales(foundSales)
 
     setLoading(false)
   }, [id, router])
@@ -283,32 +290,35 @@ export default function StockInEditPage() {
           </Select>
 
           {items.map((item, idx) => (
-            <div key={idx} className="border rounded-lg p-3 space-y-3">
+            <div key={idx} className={`border rounded-lg p-3 space-y-3 ${item.is_locked ? 'bg-muted/30' : ''}`}>
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-sm font-medium">{item.product_name}</span>
                   <Badge variant="secondary" className="ml-2 text-xs">{item.product_unit}</Badge>
+                  {item.is_locked && <Badge variant="outline" className="ml-2 text-xs text-amber-600 border-amber-300">Đã xuất</Badge>}
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                {!item.is_locked && (
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1">
                   <Label className="text-xs text-muted-foreground">Mã lô *</Label>
-                  <Input value={item.batch_code} onChange={(e) => updateItem(idx, 'batch_code', e.target.value)} />
+                  <Input value={item.batch_code} onChange={(e) => updateItem(idx, 'batch_code', e.target.value)} disabled={item.is_locked} />
                 </div>
                 <div className="grid gap-1">
                   <Label className="text-xs text-muted-foreground">HSD</Label>
-                  <Input type="date" value={item.expired_date} onChange={(e) => updateItem(idx, 'expired_date', e.target.value)} />
+                  <Input type="date" value={item.expired_date} onChange={(e) => updateItem(idx, 'expired_date', e.target.value)} disabled={item.is_locked} />
                 </div>
                 <div className="grid gap-1">
                   <Label className="text-xs text-muted-foreground">Số lượng *</Label>
-                  <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} />
+                  <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} disabled={item.is_locked} />
                 </div>
                 <div className="grid gap-1">
                   <Label className="text-xs text-muted-foreground">Giá nhập *</Label>
-                  <CurrencyInput value={item.cost_price} onValueChange={(v) => updateItem(idx, 'cost_price', v)} />
+                  <CurrencyInput value={item.cost_price} onValueChange={(v) => updateItem(idx, 'cost_price', v)} disabled={item.is_locked} />
                 </div>
               </div>
               <div className="grid gap-1">
