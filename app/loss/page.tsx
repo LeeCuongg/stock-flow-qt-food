@@ -56,6 +56,7 @@ interface LossRecord {
   total_loss_cost: number
   status: string
   created_at: string
+  source_sale_id: string | null
   products: { name: string; sku: string | null; unit: string } | null
   inventory_batches: { batch_code: string | null; expiry_date: string | null } | null
 }
@@ -97,7 +98,7 @@ export default function LossPage() {
     setIsLoading(true)
     const { data, error } = await supabase
       .from('loss_records')
-      .select('id, quantity, reason, note, cost_price, total_loss_cost, status, created_at, products(name, sku, unit), inventory_batches(batch_code, expiry_date)')
+      .select('id, quantity, reason, note, cost_price, total_loss_cost, status, created_at, source_sale_id, products(name, sku, unit), inventory_batches(batch_code, expiry_date)')
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
     if (error) toast.error('Lỗi tải dữ liệu hao hụt')
@@ -114,7 +115,7 @@ export default function LossPage() {
     const { data } = await supabase
       .from('inventory_batches')
       .select('id, product_id, batch_code, quantity_remaining, cost_price, expiry_date')
-      .gt('quantity_remaining', 0)
+      .neq('quantity_remaining', 0)
       .order('expiry_date', { ascending: true, nullsFirst: false })
     setBatches(data || [])
   }, [])
@@ -126,13 +127,16 @@ export default function LossPage() {
   }, [loadRecords, loadProducts, loadBatches])
 
   const batchesForProduct = (productId: string) =>
-    batches.filter((b) => b.product_id === productId && b.quantity_remaining > 0)
+    batches.filter((b) => b.product_id === productId && b.quantity_remaining !== 0)
 
   const selectedBatch = batches.find((b) => b.id === selectedBatchId)
+  const isNegativeBatch = selectedBatch ? selectedBatch.quantity_remaining < 0 : false
 
-  const effectiveLossQty = inputMode === 'remaining' && selectedBatch
-    ? selectedBatch.quantity_remaining - remainingQty
-    : quantity
+  const effectiveLossQty = isNegativeBatch
+    ? quantity
+    : inputMode === 'remaining' && selectedBatch
+      ? selectedBatch.quantity_remaining - remainingQty
+      : quantity
   const lossCost = selectedBatch ? effectiveLossQty * selectedBatch.cost_price : 0
 
   // Filter records
@@ -161,6 +165,41 @@ export default function LossPage() {
   const handleSubmit = async () => {
     if (!selectedBatchId) { toast.error('Vui lòng chọn lô hàng'); return }
     if (!reason) { toast.error('Vui lòng chọn lý do'); return }
+
+    if (isNegativeBatch) {
+      // Positive adjustment for negative batch
+      if (quantity <= 0) { toast.error('Số lượng bù phải > 0'); return }
+      if (selectedBatch && quantity > Math.abs(selectedBatch.quantity_remaining)) {
+        toast.error(`Số lượng bù tối đa: ${formatQty(Math.abs(selectedBatch.quantity_remaining))}`)
+        return
+      }
+
+      setSaving(true)
+      try {
+        const { data: warehouses } = await supabase.from('warehouses').select('id').limit(1)
+        const warehouseId = warehouses?.[0]?.id
+        if (!warehouseId) { toast.error('Chưa có kho'); return }
+
+        const { error } = await supabase.rpc('create_positive_loss_record', {
+          p_warehouse_id: warehouseId,
+          p_product_id: selectedProductId,
+          p_batch_id: selectedBatchId,
+          p_quantity: quantity,
+          p_reason: reason,
+          p_note: note.trim() || null,
+        })
+
+        if (error) throw error
+        toast.success('Bù sai số thành công')
+        setDialogOpen(false)
+        loadRecords()
+        loadBatches()
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Lỗi không xác định'
+        toast.error(`Lỗi: ${message}`)
+      } finally { setSaving(false) }
+      return
+    }
 
     const lossQty = inputMode === 'remaining' && selectedBatch
       ? selectedBatch.quantity_remaining - remainingQty
@@ -233,6 +272,8 @@ export default function LossPage() {
   const reasonLabel = (value: string) =>
     LOSS_REASONS.find((r) => r.value === value)?.label || value
 
+  const isAutoTolerance = (r: LossRecord) => r.reason === 'AUTO_TOLERANCE'
+
   const reasonBadgeVariant = (value: string) => {
     switch (value) {
       case 'EXPIRED': return 'destructive' as const
@@ -240,7 +281,7 @@ export default function LossPage() {
       case 'LOST': return 'destructive' as const
       case 'ADJUSTMENT': return 'secondary' as const
       case 'SAMPLE': return 'outline' as const
-      case 'AUTO_TOLERANCE': return 'outline' as const
+      case 'AUTO_TOLERANCE': return 'default' as const
       default: return 'secondary' as const
     }
   }
@@ -317,13 +358,15 @@ export default function LossPage() {
                         ? formatVNDate(r.inventory_batches.expiry_date)
                         : '-'}
                     </TableCell>
-                    <TableCell className="text-right">{formatQty(r.quantity)}</TableCell>
+                    <TableCell className={`text-right ${isAutoTolerance(r) ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
+                      {isAutoTolerance(r) ? `+${formatQty(r.quantity)}` : formatQty(r.quantity)}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={reasonBadgeVariant(r.reason)}>{reasonLabel(r.reason)}</Badge>
                     </TableCell>
                     <TableCell className="text-right">{formatVN(r.cost_price)}</TableCell>
-                    <TableCell className="text-right font-medium text-destructive">
-                      {formatVN(r.total_loss_cost)}
+                    <TableCell className={`text-right font-medium ${isAutoTolerance(r) ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                      {isAutoTolerance(r) ? `+${formatVN(r.total_loss_cost)}` : formatVN(r.total_loss_cost)}
                     </TableCell>
                     <TableCell>
                       {r.status === 'CANCELLED'
@@ -354,10 +397,10 @@ export default function LossPage() {
                 <div><span className="text-muted-foreground">Đơn vị:</span><br/>{detailRecord.products?.unit || '-'}</div>
                 <div><span className="text-muted-foreground">Mã lô:</span><br/><span className="font-mono">{detailRecord.inventory_batches?.batch_code || '-'}</span></div>
                 <div><span className="text-muted-foreground">HSD:</span><br/>{detailRecord.inventory_batches?.expiry_date ? formatVNDate(detailRecord.inventory_batches.expiry_date) : '-'}</div>
-                <div><span className="text-muted-foreground">Số lượng:</span><br/><span className="font-medium">{formatQty(detailRecord.quantity)}</span></div>
+                <div><span className="text-muted-foreground">Số lượng:</span><br/><span className={`font-medium ${isAutoTolerance(detailRecord) ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>{isAutoTolerance(detailRecord) ? `+${formatQty(detailRecord.quantity)}` : formatQty(detailRecord.quantity)}</span></div>
                 <div><span className="text-muted-foreground">Lý do:</span><br/><Badge variant={reasonBadgeVariant(detailRecord.reason)}>{reasonLabel(detailRecord.reason)}</Badge></div>
                 <div><span className="text-muted-foreground">Giá vốn:</span><br/>{formatVN(detailRecord.cost_price)} VND</div>
-                <div><span className="text-muted-foreground">Tiền hao hụt:</span><br/><span className="font-medium text-destructive">{formatVN(detailRecord.total_loss_cost)} VND</span></div>
+                <div><span className="text-muted-foreground">{isAutoTolerance(detailRecord) ? 'Bù sai số:' : 'Tiền hao hụt:'}</span><br/><span className={`font-medium ${isAutoTolerance(detailRecord) ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>{isAutoTolerance(detailRecord) ? `+${formatVN(detailRecord.total_loss_cost)}` : formatVN(detailRecord.total_loss_cost)} VND</span></div>
                 <div><span className="text-muted-foreground">Trạng thái:</span><br/>
                   {detailRecord.status === 'CANCELLED'
                     ? <Badge variant="destructive">Đã huỷ</Badge>
@@ -369,9 +412,13 @@ export default function LossPage() {
               )}
               {detailRecord.status !== 'CANCELLED' && (
                 <div className="pt-2 border-t">
-                  <Button variant="destructive" size="sm" onClick={() => openCancelDialog(detailRecord)}>
-                    <Trash2 className="mr-2 h-4 w-4" /> Huỷ ghi nhận
-                  </Button>
+                  {isAutoTolerance(detailRecord) && detailRecord.source_sale_id ? (
+                    <p className="text-xs text-muted-foreground">Sai số tự động từ đơn bán — huỷ đơn bán để hoàn tác.</p>
+                  ) : (
+                    <Button variant="destructive" size="sm" onClick={() => openCancelDialog(detailRecord)}>
+                      <Trash2 className="mr-2 h-4 w-4" /> Huỷ ghi nhận
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -421,8 +468,8 @@ export default function LossPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Ghi nhận hao hụt</DialogTitle>
-            <DialogDescription>Chọn lô hàng và nhập số lượng hao hụt</DialogDescription>
+            <DialogTitle>{isNegativeBatch ? 'Bù sai số lô âm' : 'Ghi nhận hao hụt'}</DialogTitle>
+            <DialogDescription>{isNegativeBatch ? 'Cộng lại tồn kho cho lô hàng đang bị âm' : 'Chọn lô hàng và nhập số lượng hao hụt'}</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
@@ -447,16 +494,23 @@ export default function LossPage() {
               <div className="grid gap-2">
                 <Label>Lô hàng *</Label>
                 {batchesForProduct(selectedProductId).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Không có lô hàng còn tồn.</p>
+                  <p className="text-sm text-muted-foreground">Không có lô hàng còn tồn hoặc bị âm.</p>
                 ) : (
-                  <Select value={selectedBatchId} onValueChange={setSelectedBatchId}>
+                  <Select value={selectedBatchId} onValueChange={(val) => {
+                    setSelectedBatchId(val)
+                    const b = batches.find((x) => x.id === val)
+                    if (b && b.quantity_remaining < 0) {
+                      setQuantity(Math.abs(b.quantity_remaining))
+                      setInputMode('loss')
+                    }
+                  }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn lô hàng..." />
                     </SelectTrigger>
                     <SelectContent>
                       {batchesForProduct(selectedProductId).map((b) => (
                         <SelectItem key={b.id} value={b.id}>
-                          {b.batch_code || '-'} — Tồn: {formatQty(b.quantity_remaining)}
+                          {b.batch_code || '-'} — {b.quantity_remaining < 0 ? `⚠️ Âm: ${formatQty(b.quantity_remaining)}` : `Tồn: ${formatQty(b.quantity_remaining)}`}
                           {b.expiry_date ? ` — HSD: ${formatVNDate(b.expiry_date)}` : ''}
                         </SelectItem>
                       ))}
@@ -468,11 +522,19 @@ export default function LossPage() {
 
             {/* Batch info */}
             {selectedBatch && (
-              <div className="rounded-md border p-3 text-sm space-y-1 bg-muted/30">
+              <div className={`rounded-md border p-3 text-sm space-y-1 ${isNegativeBatch ? 'bg-destructive/10 border-destructive/30' : 'bg-muted/30'}`}>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Tồn kho:</span>
-                  <span className="font-medium">{formatQty(selectedBatch.quantity_remaining)}</span>
+                  <span className={`font-medium ${isNegativeBatch ? 'text-destructive' : ''}`}>
+                    {formatQty(selectedBatch.quantity_remaining)}
+                  </span>
                 </div>
+                {isNegativeBatch && (
+                  <div className="flex items-center gap-1 text-destructive">
+                    <AlertTriangle className="h-3 w-3" />
+                    <span className="text-xs">Lô này đang bị âm — cần bù +{formatQty(Math.abs(selectedBatch.quantity_remaining))} để về 0</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Giá vốn:</span>
                   <span className="font-medium">{formatVN(selectedBatch.cost_price)} VND</span>
@@ -487,7 +549,7 @@ export default function LossPage() {
             )}
 
             {/* Input mode */}
-            {selectedBatch && (
+            {selectedBatch && !isNegativeBatch && (
               <div className="grid gap-2">
                 <Label>Cách nhập</Label>
                 <div className="flex gap-2">
@@ -505,7 +567,16 @@ export default function LossPage() {
 
             {/* Quantity + Reason */}
             <div className="grid grid-cols-2 gap-4">
-              {inputMode === 'loss' ? (
+              {isNegativeBatch ? (
+                <div className="grid gap-2">
+                  <Label>Số lượng bù * (tối đa {formatQty(Math.abs(selectedBatch?.quantity_remaining ?? 0))})</Label>
+                  <Input type="number" step="any" min={0.01} max={Math.abs(selectedBatch?.quantity_remaining ?? 0)}
+                    value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+                  <p className="text-xs text-muted-foreground">
+                    Sau khi bù: {formatQty((selectedBatch?.quantity_remaining ?? 0) + quantity)}
+                  </p>
+                </div>
+              ) : inputMode === 'loss' ? (
                 <div className="grid gap-2">
                   <Label>Số lượng hao hụt *{selectedBatch ? ` (tối đa ${selectedBatch.quantity_remaining})` : ''}</Label>
                   <Input type="number" min={1} max={selectedBatch?.quantity_remaining || undefined}
@@ -547,10 +618,12 @@ export default function LossPage() {
 
             {/* Loss cost preview */}
             {selectedBatch && effectiveLossQty > 0 && (
-              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+              <div className={`rounded-md border p-3 ${isNegativeBatch ? 'border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20' : 'border-destructive/30 bg-destructive/5'}`}>
                 <div className="flex justify-between text-sm font-medium">
-                  <span>Tiền hao hụt:</span>
-                  <span className="text-destructive text-lg">{formatVN(lossCost)} VND</span>
+                  <span>{isNegativeBatch ? 'Bù sai số:' : 'Tiền hao hụt:'}</span>
+                  <span className={`text-lg ${isNegativeBatch ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                    {isNegativeBatch ? '+' : ''}{formatVN(lossCost)} VND
+                  </span>
                 </div>
               </div>
             )}
@@ -558,8 +631,13 @@ export default function LossPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Hủy</Button>
-            <Button variant="destructive" onClick={handleSubmit} disabled={saving || !selectedBatchId || !reason}>
-              {saving ? 'Đang lưu...' : 'Ghi nhận hao hụt'}
+            <Button
+              variant={isNegativeBatch ? 'default' : 'destructive'}
+              onClick={handleSubmit}
+              disabled={saving || !selectedBatchId || !reason}
+              className={isNegativeBatch ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
+            >
+              {saving ? 'Đang lưu...' : isNegativeBatch ? 'Bù sai số' : 'Ghi nhận hao hụt'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -25,22 +25,98 @@ interface InventoryBatch {
   products: { name: string; unit: string; sku: string | null } | null
 }
 
+interface BatchSourceRow {
+  product_id: string
+  batch_code: string | null
+  expired_date: string | null
+  stock_in: {
+    created_at: string
+    warehouse_id: string
+    supplier_name: string | null
+    status: string
+    suppliers: { name: string } | null
+  } | null
+}
+
+interface InventoryBatchView extends InventoryBatch {
+  import_date: string | null
+  supplier_name: string | null
+}
+
 export default function InventoryPage() {
-  const [batches, setBatches] = useState<InventoryBatch[]>([])
+  const [batches, setBatches] = useState<InventoryBatchView[]>([])
   const [search, setSearch] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const supabase = createClient()
 
   const loadBatches = useCallback(async () => {
     setIsLoading(true)
-    const { data, error } = await supabase
-      .from('inventory_batches')
-      .select('*, products(name, unit, sku)')
-      .order('created_at', { ascending: false })
-    if (error) {
+    const [batchesRes, sourcesRes] = await Promise.all([
+      supabase
+        .from('inventory_batches')
+        .select('*, products(name, unit, sku)')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('stock_in_items')
+        .select('product_id, batch_code, expired_date, stock_in!inner(created_at, warehouse_id, supplier_name, status, suppliers(name))'),
+    ])
+
+    if (batchesRes.error || sourcesRes.error) {
       toast.error('Lỗi tải tồn kho')
     } else {
-      setBatches(data || [])
+      const sourceMap = new Map<string, { hasSource: boolean; activeSource: BatchSourceRow['stock_in'] | null }>()
+
+      for (const row of (sourcesRes.data || []) as BatchSourceRow[]) {
+        const stockIn = row.stock_in
+        if (!stockIn) continue
+
+        const key = [
+          stockIn.warehouse_id,
+          row.product_id,
+          row.batch_code || '',
+          row.expired_date || '',
+        ].join('|')
+
+        const existing = sourceMap.get(key) || { hasSource: false, activeSource: null }
+        existing.hasSource = true
+
+        if (stockIn.status !== 'CANCELLED') {
+          if (!existing.activeSource || new Date(stockIn.created_at).getTime() < new Date(existing.activeSource.created_at).getTime()) {
+            existing.activeSource = stockIn
+          }
+        }
+
+        sourceMap.set(key, existing)
+      }
+
+      const nextBatches = ((batchesRes.data || []) as InventoryBatch[])
+        .filter((batch) => {
+          const key = [
+            batch.warehouse_id,
+            batch.product_id,
+            batch.batch_code || '',
+            batch.expiry_date || '',
+          ].join('|')
+          const source = sourceMap.get(key)
+          return !source || source.activeSource !== null
+        })
+        .filter((batch) => batch.quantity_remaining !== 0)
+        .map((batch) => {
+          const key = [
+            batch.warehouse_id,
+            batch.product_id,
+            batch.batch_code || '',
+            batch.expiry_date || '',
+          ].join('|')
+          const activeSource = sourceMap.get(key)?.activeSource
+          return {
+            ...batch,
+            import_date: activeSource?.created_at || null,
+            supplier_name: activeSource?.supplier_name || activeSource?.suppliers?.name || null,
+          }
+        })
+
+      setBatches(nextBatches)
     }
     setIsLoading(false)
   }, [])
@@ -117,6 +193,8 @@ export default function InventoryPage() {
                   <TableHead>Mã lô</TableHead>
                   <TableHead>Sản phẩm</TableHead>
                   <TableHead>SKU</TableHead>
+                  <TableHead>Ngày nhập</TableHead>
+                  <TableHead>Nhà cung cấp</TableHead>
                   <TableHead className="text-right">Tồn kho</TableHead>
                   <TableHead>Ngày SX</TableHead>
                   <TableHead>Hạn sử dụng</TableHead>
@@ -131,6 +209,7 @@ export default function InventoryPage() {
                     <TableRow
                       key={batch.id}
                       className={
+                        batch.quantity_remaining < 0 ? 'bg-destructive/10' :
                         status === 'expired' ? 'bg-destructive/5' :
                         status === 'critical' ? 'bg-destructive/5' :
                         status === 'warning' ? 'bg-yellow-50 dark:bg-yellow-950/20' : ''
@@ -139,9 +218,18 @@ export default function InventoryPage() {
                       <TableCell className="font-mono text-xs">{batch.batch_code || '-'}</TableCell>
                       <TableCell className="font-medium">{product?.name || '-'}</TableCell>
                       <TableCell className="font-mono text-xs">{product?.sku || '-'}</TableCell>
-                      <TableCell className="text-right">
-                        {formatQty(batch.quantity_remaining || batch.quantity)}{' '}
+                      <TableCell>
+                        {batch.import_date
+                          ? formatVNDate(batch.import_date)
+                          : '-'}
+                      </TableCell>
+                      <TableCell>{batch.supplier_name || '-'}</TableCell>
+                      <TableCell className={`text-right ${batch.quantity_remaining < 0 ? 'text-destructive font-bold' : ''}`}>
+                        {formatQty(batch.quantity_remaining)}{' '}
                         <Badge variant="secondary" className="ml-1">{product?.unit || '-'}</Badge>
+                        {batch.quantity_remaining < 0 && (
+                          <Badge variant="destructive" className="ml-1 gap-1"><AlertTriangle className="h-3 w-3" />Âm</Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         {batch.manufactured_date

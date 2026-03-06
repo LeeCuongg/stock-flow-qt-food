@@ -42,6 +42,20 @@ interface EditSaleItem {
   note: string
 }
 
+function getToleranceSummary(remaining: number, toleranceType: 'FIXED' | 'PERCENT', toleranceValue: number) {
+  const allowed = toleranceType === 'PERCENT'
+    ? remaining * toleranceValue / 100
+    : toleranceValue
+
+  return {
+    allowed,
+    maxQty: remaining + allowed,
+    label: toleranceType === 'PERCENT'
+      ? `${formatQty(toleranceValue)}%`
+      : `${formatQty(toleranceValue)}`,
+  }
+}
+
 export default function SaleEditPage() {
   const params = useParams()
   const router = useRouter()
@@ -171,10 +185,7 @@ export default function SaleEditPage() {
     const tolType = prod?.tolerance_type || 'FIXED'
     const tolValue = prod?.tolerance_value || 0
     const effectiveRemaining = item.batch_remaining + item.old_qty
-    const tolAllowed = tolType === 'PERCENT'
-      ? effectiveRemaining * tolValue / 100
-      : tolValue
-    return effectiveRemaining + tolAllowed
+    return getToleranceSummary(effectiveRemaining, tolType, tolValue).maxQty
   }
 
   const handleSubmit = async () => {
@@ -305,68 +316,71 @@ export default function SaleEditPage() {
 
           {/* Items list */}
           {items.map((item, idx) => (
-            <div key={idx} className="border rounded-lg p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{item.product_name}</span>
-                  <Badge variant="secondary" className="text-xs">{item.product_unit}</Badge>
-                  <Badge variant="outline" className="font-mono text-xs">{item.batch_code}</Badge>
-                </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>Tồn hiện tại: {item.batch_remaining}</span>
-                <span>• SL cũ: {item.old_qty}</span>
-                <span>• Max: {maxQty(item)}</span>
-                <span>• Giá vốn: {formatVN(item.batch_cost_price)}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1">
-                  <Label className="text-xs text-muted-foreground">Số lượng * (max {maxQty(item)})</Label>
-                  <Input type="number" min={1} max={maxQty(item)} value={item.quantity}
-                    onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} />
-                </div>
-                <div className="grid gap-1">
-                  <Label className="text-xs text-muted-foreground">Giá bán *</Label>
-                  <CurrencyInput value={item.sale_price} onValueChange={(v) => updateItem(idx, 'sale_price', v)} />
-                </div>
-              </div>
-              <div className="grid gap-1">
-                <Input placeholder="Ghi chú sản phẩm..." value={item.note}
-                  onChange={(e) => updateItem(idx, 'note', e.target.value)} className="text-xs h-8" />
-              </div>
-              {(() => {
-                const prod = products.find(p => p.id === item.product_id)
-                const tolType = prod?.tolerance_type || 'FIXED'
-                const tolValue = prod?.tolerance_value || 0
-                const effectiveRemaining = item.batch_remaining + item.old_qty
-                const tolAllowed = tolType === 'PERCENT'
-                  ? effectiveRemaining * tolValue / 100
-                  : tolValue
-                const isOverRemaining = item.quantity > effectiveRemaining
-                const toleranceDelta = isOverRemaining ? item.quantity - effectiveRemaining : 0
-                if (isOverRemaining && toleranceDelta <= tolAllowed && tolAllowed > 0) {
-                  return (
-                    <div className="rounded-md border border-yellow-400/50 bg-yellow-50 dark:bg-yellow-950/20 px-3 py-2 text-xs text-yellow-800 dark:text-yellow-200">
-                      ⚠️ Sai số {formatQty(toleranceDelta)} {prod?.unit || ''} nằm trong mức cho phép ({tolType === 'PERCENT' ? `${tolValue}%` : `${tolValue} ${prod?.unit || ''}`}). Hệ thống sẽ tự động ghi nhận hao hụt nhỏ.
+            (() => {
+              const prod = products.find(p => p.id === item.product_id)
+              const tolType = prod?.tolerance_type || 'FIXED'
+              const tolValue = prod?.tolerance_value || 0
+              const effectiveRemaining = item.batch_remaining + item.old_qty
+              const tolerance = getToleranceSummary(effectiveRemaining, tolType, tolValue)
+              const isOverRemaining = item.quantity > effectiveRemaining
+              const toleranceDelta = isOverRemaining ? item.quantity - effectiveRemaining : 0
+
+              return (
+                <div key={idx} className="border rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{item.product_name}</span>
+                      <Badge variant="secondary" className="text-xs">{item.product_unit}</Badge>
+                      <Badge variant="outline" className="font-mono text-xs">{item.batch_code}</Badge>
                     </div>
-                  )
-                }
-                return null
-              })()}
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.sale_price)}</span>
-                </span>
-                <span className="text-muted-foreground">
-                  Lãi: <span className={(item.quantity * item.sale_price - item.quantity * item.batch_cost_price) >= 0 ? 'font-medium text-green-600' : 'font-medium text-destructive'}>
-                    {formatVN(item.quantity * item.sale_price - item.quantity * item.batch_cost_price)}
-                  </span>
-                </span>
-              </div>
-            </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(idx)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>Tồn thực: {formatQty(item.batch_remaining)}</span>
+                    <span>• SL cũ: {formatQty(item.old_qty)}</span>
+                    <span>• Khả dụng khi sửa: {formatQty(effectiveRemaining)}</span>
+                    {tolerance.allowed > 0 && <span>• Sai số tối đa: {formatQty(tolerance.allowed)} {item.product_unit}</span>}
+                    <span>• Giá vốn: {formatVN(item.batch_cost_price)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1">
+                      <Label className="text-xs text-muted-foreground">Số lượng * (tối đa {formatQty(tolerance.maxQty)})</Label>
+                      <Input type="number" min={0.01} step="any" max={tolerance.maxQty} value={item.quantity}
+                        onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} />
+                      <p className="text-[11px] text-muted-foreground">
+                        Có thể bán ngay: {formatQty(effectiveRemaining)} {item.product_unit}
+                        {tolerance.allowed > 0 && ` • Sai số: ${formatQty(tolerance.allowed)} ${item.product_unit} (${tolerance.label})`}
+                      </p>
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs text-muted-foreground">Giá bán *</Label>
+                      <CurrencyInput value={item.sale_price} onValueChange={(v) => updateItem(idx, 'sale_price', v)} />
+                    </div>
+                  </div>
+                  <div className="grid gap-1">
+                    <Input placeholder="Ghi chú sản phẩm..." value={item.note}
+                      onChange={(e) => updateItem(idx, 'note', e.target.value)} className="text-xs h-8" />
+                  </div>
+                  {isOverRemaining && toleranceDelta <= tolerance.allowed && tolerance.allowed > 0 && (
+                    <div className="rounded-md border border-yellow-400/50 bg-yellow-50 dark:bg-yellow-950/20 px-3 py-2 text-xs text-yellow-800 dark:text-yellow-200">
+                      Sai số {formatQty(toleranceDelta)} {prod?.unit || ''} nằm trong mức cho phép ({tolType === 'PERCENT' ? `${formatQty(tolValue)}%` : `${formatQty(tolValue)} ${prod?.unit || ''}`}). Khi lưu đơn, hệ thống sẽ đưa tồn lô về 0 và ghi nhận phần vượt này là hao hụt AUTO_TOLERANCE, không để tồn âm.
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Thành tiền: <span className="font-medium text-foreground">{formatVN(item.quantity * item.sale_price)}</span>
+                    </span>
+                    <span className="text-muted-foreground">
+                      Lãi: <span className={(item.quantity * item.sale_price - item.quantity * item.batch_cost_price) >= 0 ? 'font-medium text-green-600' : 'font-medium text-destructive'}>
+                        {formatVN(item.quantity * item.sale_price - item.quantity * item.batch_cost_price)}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              )
+            })()
           ))}
 
           {items.length > 0 && (
