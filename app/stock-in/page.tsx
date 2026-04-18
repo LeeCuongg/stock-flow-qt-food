@@ -18,12 +18,13 @@ import {
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { SearchableSelect } from '@/components/ui/searchable-select'
-import { Plus, Trash2, PackagePlus, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
+import { Plus, Trash2, PackagePlus, CreditCard, Pencil, Search, X, ChevronLeft, ChevronRight, Eye, FileSpreadsheet, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { ViewStockInDetails } from '@/components/view-stock-in-details'
 import { formatVN, formatQty, vnToday, vnDateTimeISO, formatVNDate } from '@/lib/utils'
+import { exportToExcel, ExportRecord } from '@/lib/excel-export'
 
 interface Supplier { id: string; name: string }
 
@@ -161,6 +162,7 @@ export default function StockInPage() {
   const [filterPaymentStatus, setFilterPaymentStatus] = useState('')
   const [filterProductId, setFilterProductId] = useState('')
   const [filterBatchCode, setFilterBatchCode] = useState('')
+  const [isExporting, setIsExporting] = useState(false)
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
   const pageSize = 50
@@ -266,6 +268,61 @@ export default function StockInPage() {
       setSupplierPrices(map)
     }
   }, [])
+
+  const handleExport = async () => {
+    if (isExporting) return
+    setIsExporting(true)
+    try {
+      // Fetch all records with current filters (no pagination)
+      const needInnerJoin = filterProductId || filterBatchCode
+      let query = needInnerJoin
+        ? supabase
+            .from('stock_in')
+            .select('id, created_at, supplier_name, supplier_id, stock_in_items!inner(product_id, quantity, unit_price, batch_code, products(name))')
+            .neq('status', 'CANCELLED')
+        : supabase
+            .from('stock_in')
+            .select('id, created_at, supplier_name, supplier_id, stock_in_items(product_id, quantity, unit_price, batch_code, products(name))')
+            .neq('status', 'CANCELLED')
+      if (filterProductId) query = query.eq('stock_in_items.product_id', filterProductId)
+      if (filterBatchCode) query = query.ilike('stock_in_items.batch_code', `%${filterBatchCode}%`)
+      if (filterDateFrom) query = query.gte('created_at', filterDateFrom + 'T00:00:00+07:00')
+      if (filterDateTo) query = query.lte('created_at', filterDateTo + 'T23:59:59+07:00')
+      if (filterSupplierId) query = query.eq('supplier_id', filterSupplierId)
+      if (filterPaymentStatus) query = query.eq('payment_status', filterPaymentStatus)
+      query = query.order('created_at', { ascending: true })
+
+      const { data, error } = await query
+      if (error) throw error
+
+      if (!data || data.length === 0) {
+        toast.warning('Không có dữ liệu để xuất')
+        return
+      }
+
+      // Transform to ExportRecord format
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const exportRecords: ExportRecord[] = data.map((r: any) => ({
+        created_at: r.created_at,
+        supplier_name: r.supplier_name,
+        supplier_id: r.supplier_id,
+        items: (r.stock_in_items || []).map((item: any) => ({
+          product_id: item.product_id,
+          product_name: item.products?.name || 'Unknown',
+          quantity: Number(item.quantity),
+          price: Number(item.unit_price),
+        })),
+      }))
+
+      await exportToExcel(exportRecords, 'stock-in', filterDateFrom || null, filterDateTo || null)
+      toast.success('Xuất Excel thành công')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Lỗi không xác định'
+      toast.error(`Lỗi xuất Excel: ${message}`)
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   const openCreate = () => {
     setSupplierName('')
@@ -576,6 +633,14 @@ export default function StockInPage() {
             </div>
             <Button variant="outline" size="sm" className="h-9" onClick={() => { setPage(0); loadRecords() }}>
               <Search className="mr-1 h-3 w-3" /> Lọc
+            </Button>
+            <Button variant="outline" size="sm" className="h-9" onClick={handleExport} disabled={isExporting}>
+              {isExporting ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="mr-1 h-3 w-3" />
+              )}
+              Xuất Excel
             </Button>
             {(filterDatePreset !== 'all' || filterSupplierId || filterPaymentStatus || filterProductId || filterBatchCode) && (
               <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterDatePreset('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterSupplierId(''); setFilterPaymentStatus(''); setFilterProductId(''); setFilterBatchCode(''); setPage(0) }}>
