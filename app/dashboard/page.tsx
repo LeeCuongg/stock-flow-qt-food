@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -28,6 +28,18 @@ import {
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { formatVNDate } from '@/lib/utils'
+import type { CustomerMonthlyStat, MetricKey, CustomerOption, Granularity } from '@/lib/customer-analytics'
+import {
+  getGranularity,
+  filterStatsByCustomers,
+  transformToChartData,
+  calculateCustomerPerformance,
+  getUnderperformingCustomers,
+} from '@/lib/customer-analytics'
+import { FilterBar } from '@/components/customer-analytics/filter-bar'
+import { RevenueTrendChart } from '@/components/customer-analytics/revenue-trend-chart'
+import { CustomerPerformanceTable } from '@/components/customer-analytics/customer-performance-table'
+import { UnderperformingCustomersCard } from '@/components/customer-analytics/underperforming-customers-card'
 interface Summary {
   revenue_total: number; cost_total: number; profit_total: number; loss_total: number
 }
@@ -165,6 +177,17 @@ export default function DashboardPage() {
   const [expenseByCategory, setExpenseByCategory] = useState<ExpenseByCategory[]>([])
   const [dailyExpense, setDailyExpense] = useState<DailyExpense[]>([])
 
+  // ── Tab state ──
+  const [activeTab, setActiveTab] = useState('overview')
+
+  // ── Customer analytics data ──
+  const [customerMonthlyStats, setCustomerMonthlyStats] = useState<CustomerMonthlyStat[]>([])
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([])
+  const [selectedMetric, setSelectedMetric] = useState<MetricKey>('revenue')
+  const [customerAnalyticsLoading, setCustomerAnalyticsLoading] = useState(false)
+  const [customerAnalyticsError, setCustomerAnalyticsError] = useState<string | null>(null)
+  const [customerGranularity, setCustomerGranularity] = useState<Granularity>('month')
+
   const loadWarehouses = useCallback(async () => {
     const { data } = await supabase.from('warehouses').select('id, name').order('name')
     if (data && data.length > 0) {
@@ -246,6 +269,57 @@ export default function DashboardPage() {
   useEffect(() => { loadWarehouses() }, [loadWarehouses])
   useEffect(() => { if (warehouseId) loadDashboard() }, [warehouseId, loadDashboard])
 
+  // ── Customer analytics loader ──
+  const loadCustomerAnalytics = useCallback(async (pStartDate: string, pEndDate: string) => {
+    if (!warehouseId) return
+    setCustomerAnalyticsLoading(true)
+    setCustomerAnalyticsError(null)
+    try {
+      const granularity = getGranularity(pStartDate, pEndDate)
+      setCustomerGranularity(granularity)
+      const { data, error: rpcError } = await supabase.rpc('get_customer_monthly_stats', {
+        p_warehouse_id: warehouseId,
+        p_start_date: pStartDate,
+        p_end_date: pEndDate,
+        p_customer_ids: null,
+        p_granularity: granularity,
+      })
+      if (rpcError) throw rpcError
+      setCustomerMonthlyStats(data || [])
+    } catch (err: any) {
+      setCustomerAnalyticsError(err.message || 'Lỗi tải dữ liệu phân tích khách hàng')
+    } finally {
+      setCustomerAnalyticsLoading(false)
+    }
+  }, [warehouseId, supabase])
+
+  // Trigger customer analytics load on tab switch or global date range change
+  useEffect(() => {
+    if (activeTab === 'customers' && warehouseId) {
+      const qStart = startDate || '2000-01-01'
+      const qEnd = endDate || '2099-12-31'
+      loadCustomerAnalytics(qStart, qEnd)
+    }
+  }, [activeTab, startDate, endDate, warehouseId, loadCustomerAnalytics])
+
+  // ── Derived customer analytics data ──
+  const filteredStats = useMemo(() => filterStatsByCustomers(customerMonthlyStats, selectedCustomerIds), [customerMonthlyStats, selectedCustomerIds])
+  const chartData = useMemo(() => transformToChartData(filteredStats, selectedMetric, customerGranularity), [filteredStats, selectedMetric, customerGranularity])
+  const performanceData = useMemo(() => calculateCustomerPerformance(filteredStats), [filteredStats])
+  const underperformingData = useMemo(() => getUnderperformingCustomers(performanceData), [performanceData])
+  const customerOptions: CustomerOption[] = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const stat of customerMonthlyStats) {
+      if (!seen.has(stat.customer_id)) seen.set(stat.customer_id, stat.customer_name)
+    }
+    return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [customerMonthlyStats])
+  const customerNames = useMemo(() => {
+    const names = new Set<string>()
+    for (const stat of filteredStats) names.add(stat.customer_name)
+    return Array.from(names)
+  }, [filteredStats])
+
   const getExpiryStatus = (expiryDate: string) => {
     const diffDays = Math.ceil((new Date(expiryDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
     if (diffDays < 0) return 'expired'
@@ -320,7 +394,7 @@ export default function DashboardPage() {
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="w-full grid grid-cols-5">
           <TabsTrigger value="overview">Tổng quan</TabsTrigger>
           <TabsTrigger value="products">Sản phẩm</TabsTrigger>
@@ -769,6 +843,15 @@ export default function DashboardPage() {
 
         {/* ═══════════════ TAB 3: KHÁCH HÀNG ═══════════════ */}
         <TabsContent value="customers" className="space-y-4">
+          {/* Filter Bar */}
+          <FilterBar
+            customers={customerOptions}
+            selectedCustomerIds={selectedCustomerIds}
+            onCustomerSelectionChange={setSelectedCustomerIds}
+            metric={selectedMetric}
+            onMetricChange={setSelectedMetric}
+          />
+
           {/* KPI cards */}
           <div className="grid gap-4 md:grid-cols-3">
             {loading ? Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />) : (<>
@@ -805,53 +888,56 @@ export default function DashboardPage() {
             </>)}
           </div>
 
-          {/* Top customers bar chart + Receivables pie chart */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Users className="h-4 w-4" /> Top khách hàng theo doanh thu
-              </CardTitle></CardHeader>
-              <CardContent>
-                {loading ? <Skeleton className="h-[300px] w-full" /> : topCustomers.length === 0 ? <NoData /> : (
-                  <ChartContainer config={{
-                    total_revenue: { label: 'Doanh thu', color: 'hsl(221, 83%, 53%)' },
-                  }} className="h-[300px] w-full">
-                    <BarChart data={topCustomers} layout="vertical" margin={{ top: 5, right: 5, bottom: 5, left: 80 }}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis type="number" className="text-xs" tickFormatter={shortMoney} />
-                      <YAxis type="category" dataKey="customer_name" className="text-xs" width={75} />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Bar dataKey="total_revenue" fill="var(--color-total_revenue)" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ChartContainer>
-                )}
+          {/* Error alert for customer analytics */}
+          {customerAnalyticsError && (
+            <Card className="border-destructive">
+              <CardContent className="pt-4">
+                <p className="text-sm text-destructive">{customerAnalyticsError}</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-sm font-medium">Cơ cấu công nợ phải thu</CardTitle></CardHeader>
-              <CardContent>
-                {loading ? <Skeleton className="h-[300px] w-full" /> : receivables.length === 0 ? <NoData /> : (
-                  <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={receivables}
-                          dataKey="total_receivable"
-                          nameKey="customer_name"
-                          cx="50%" cy="50%"
-                          outerRadius={100}
-                          label={({ customer_name, percent }) => `${customer_name} ${(percent * 100).toFixed(0)}%`}
-                        >
-                          {receivables.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                        </Pie>
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          )}
+
+          {/* Top customers bar chart */}
+          <Card>
+            <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Users className="h-4 w-4" /> Top khách hàng theo doanh thu
+            </CardTitle></CardHeader>
+            <CardContent>
+              {loading ? <Skeleton className="h-[300px] w-full" /> : topCustomers.length === 0 ? <NoData /> : (
+                <ChartContainer config={{
+                  total_revenue: { label: 'Doanh thu', color: 'hsl(221, 83%, 53%)' },
+                }} className="h-[300px] w-full">
+                  <BarChart data={topCustomers} layout="vertical" margin={{ top: 5, right: 5, bottom: 5, left: 80 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis type="number" className="text-xs" tickFormatter={shortMoney} />
+                    <YAxis type="category" dataKey="customer_name" className="text-xs" width={75} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="total_revenue" fill="var(--color-total_revenue)" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Revenue Trend Chart - full width */}
+          <RevenueTrendChart
+            data={chartData}
+            metric={selectedMetric}
+            customerNames={customerNames}
+            loading={customerAnalyticsLoading}
+          />
+
+          {/* Customer Performance Table */}
+          <CustomerPerformanceTable
+            data={performanceData}
+            loading={customerAnalyticsLoading}
+          />
+
+          {/* Underperforming Customers Card */}
+          <UnderperformingCustomersCard
+            data={underperformingData}
+            loading={customerAnalyticsLoading}
+          />
 
           {/* Daily cash in/out chart */}
           <Card>
@@ -878,6 +964,7 @@ export default function DashboardPage() {
               <CardHeader><CardTitle className="text-sm font-medium">Chi tiết công nợ phải thu</CardTitle></CardHeader>
               <CardContent>
                 {loading ? <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div> : receivables.length === 0 ? <NoData /> : (
+                  <div className="max-h-[400px] overflow-y-auto">
                   <Table>
                     <TableHeader><TableRow>
                       <TableHead>Khách hàng</TableHead>
@@ -892,6 +979,7 @@ export default function DashboardPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -899,6 +987,7 @@ export default function DashboardPage() {
               <CardHeader><CardTitle className="text-sm font-medium">Chi tiết công nợ phải trả</CardTitle></CardHeader>
               <CardContent>
                 {loading ? <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div> : payables.length === 0 ? <NoData /> : (
+                  <div className="max-h-[400px] overflow-y-auto">
                   <Table>
                     <TableHeader><TableRow>
                       <TableHead>Nhà cung cấp</TableHead>
@@ -913,6 +1002,7 @@ export default function DashboardPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
