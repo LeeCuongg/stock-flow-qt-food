@@ -456,6 +456,9 @@ export function ViewSaleDetails({ open, onClose, saleId }: ViewSaleDetailsProps)
                     <span className="text-base font-bold">TỔNG CỘNG:</span>
                     <span className="text-base font-bold text-primary">{fmtVND(Number(details.total_revenue))}</span>
                   </div>
+                  <div className="flex justify-end">
+                    <span className="text-xs italic text-gray-600">Hoá đơn chưa bao gồm VAT</span>
+                  </div>
                   {paymentsTotal > 0 && (
                     <div className="flex justify-between py-1">
                       <span className="text-sm font-medium">Đã thanh toán:</span>
